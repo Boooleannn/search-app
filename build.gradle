@@ -1,0 +1,55 @@
+plugins {
+    id 'application'
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+}
+
+repositories {
+    mavenCentral()
+}
+
+javafx {
+    version = "21.0.1"
+    modules = [ 'javafx.controls', 'javafx.fxml' ]
+}
+
+application {
+    mainClass = 'HelloFX'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+// ✅ Modern way to create a fat JAR without Shadow plugin
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+tasks.register('fatJar', Jar) {
+    archiveBaseName = 'search-app'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes(
+            'Main-Class': 'HelloFX',
+            'Add-Opens': 'javafx.graphics/com.sun.javafx.application=ALL-UNNAMED'
+        )
+    }
+    from sourceSets.main.output
+    dependsOn configurations.runtimeClasspath
+
+    // Include all dependencies (including JavaFX)
+    from {
+        configurations.runtimeClasspath
+            .findAll { it.name.startsWith('javafx-') }
+            .collect { zipTree(it) }
+    }
+
+    // Include all other dependencies
+    from {
+        configurations.runtimeClasspath
+            .findAll { !it.name.startsWith('javafx-') }
+            .collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
