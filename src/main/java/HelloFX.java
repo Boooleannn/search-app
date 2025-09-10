@@ -207,6 +207,8 @@ public class HelloFX extends Application {
         }
         statusLabel.setText("✅ Bluesky login placeholder — to be implemented.");
         System.out.println("Bluesky Login Attempt: " + username);
+        // Redirect to homepage
+        root.setCenter(new HomePage("bluesky", this::showLoginPage));
     }
 
     private void handleMastodonLogin(String instanceUrl, String clientId, String clientSecret) {
@@ -216,9 +218,16 @@ public class HelloFX extends Application {
         }
         statusLabel.setText("✅ Mastodon login placeholder — to be implemented.");
         System.out.println("Mastodon Login Attempt: " + instanceUrl);
+        // Redirect to homepage
+        root.setCenter(new HomePage("mastodon", this::showLoginPage));
     }
-
     public static void main(String[] args) {
         launch(args);
+    }
+    // ...existing code...
+
+    private void showLoginPage() {
+        // Show the login form again
+        root.setCenter(loginFormContainer);
     }
 }
