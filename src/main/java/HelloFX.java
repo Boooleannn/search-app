@@ -1,86 +1,203 @@
 import javafx.application.Application;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.stage.Stage;
+
 
 public class HelloFX extends Application {
 
-    private TabPane tabPane;
+    private BorderPane root;
+    private VBox loginFormContainer;
     private Label statusLabel;
 
     @Override
     public void start(Stage stage) {
-        // Create Tabs
-        tabPane = new TabPane();
-        tabPane.getTabs().addAll(createBlueskyTab(), createMastodonTab());
+        stage.setTitle("Social Search: Bluesky + Mastodon");
 
         // Status Label
-        statusLabel = new Label("Enter credentials and login.");
-        statusLabel.setStyle("-fx-text-fill: #007acc;");
+        statusLabel = new Label("Select a platform to log in.");
+        statusLabel.setStyle("-fx-text-fill: #007acc; -fx-font-weight: bold;");
 
-        // Layout
-        VBox root = new VBox(10, tabPane, statusLabel);
-        root.setPadding(new Insets(20));
-        VBox.setVgrow(tabPane, Priority.ALWAYS);
+        // Login Form Container
+        loginFormContainer = new VBox();
+        loginFormContainer.setAlignment(Pos.CENTER);
+        loginFormContainer.setPadding(new Insets(40));
+        loginFormContainer.setSpacing(20);
 
-        // Scene
+        // Show Platform Selector (Buttons)
+        showPlatformSelector();
+
+        // Root Layout
+        root = new BorderPane();
+        root.setCenter(loginFormContainer);
+        root.setBottom(statusLabel);
+        BorderPane.setMargin(statusLabel, new Insets(10));
+
+        // Blue Theme Background
+        root.setStyle("-fx-background-color: #f0f8ff;");
+
         Scene scene = new Scene(root, 800, 500);
         stage.setScene(scene);
-        stage.setTitle("Social Search: Bluesky + Mastodon");
         stage.show();
     }
 
-    private Tab createBlueskyTab() {
-        Tab tab = new Tab("Bluesky");
+    private void showPlatformSelector() {
+        loginFormContainer.getChildren().clear();
+
+        Label titleLabel = new Label("Choose Platform to Log In");
+        titleLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #005fa3;");
+        titleLabel.setAlignment(Pos.CENTER);
+
+        // Load Images
+        Image blueskyImage = new Image(getClass().getResourceAsStream("/images/Bluesky_Logo.png"));
+        Image mastodonImage = new Image(getClass().getResourceAsStream("/images/mastodon.svg.png"));
+
+        ImageView blueskyView = new ImageView(blueskyImage);
+        blueskyView.setFitHeight(40);
+        blueskyView.setFitWidth(40);
+        blueskyView.setPreserveRatio(true);
+
+        ImageView mastodonView = new ImageView(mastodonImage);
+        mastodonView.setFitHeight(40);
+        mastodonView.setFitWidth(40);
+        mastodonView.setPreserveRatio(true);
+
+        // Bluesky Button with Image
+        Button blueskyButton = new Button("Bluesky", blueskyView);
+        styleBigButton(blueskyButton);
+        blueskyButton.setOnAction(e -> showBlueskyLoginForm());
+        blueskyButton.setAlignment(Pos.CENTER_LEFT);
+        blueskyButton.setContentDisplay(ContentDisplay.LEFT);
+
+        // Mastodon Button with Image
+        Button mastodonButton = new Button("Mastodon", mastodonView);
+        mastodonButton.setGraphic(mastodonView);
+        styleBigButton(mastodonButton);
+        mastodonButton.setOnAction(e -> showMastodonLoginForm());
+        mastodonButton.setAlignment(Pos.CENTER_RIGHT);
+        mastodonButton.setContentDisplay(ContentDisplay.LEFT);
+
+        HBox buttonBox = new HBox(20, blueskyButton, mastodonButton);
+        buttonBox.setAlignment(Pos.CENTER);
+
+        VBox selector = new VBox(40, titleLabel, buttonBox);
+        selector.setAlignment(Pos.CENTER);
+
+        loginFormContainer.getChildren().addAll(selector);
+    }
+
+    private void showBlueskyLoginForm() {
+        loginFormContainer.getChildren().clear();
+
+        Label header = new Label("Log in to Bluesky");
+        header.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #005fa3;");
 
         TextField usernameField = new TextField();
         usernameField.setPromptText("Username (e.g., user.bsky.social)");
+        styleTextField(usernameField);
 
         PasswordField appPasswordField = new PasswordField();
-        appPasswordField.setPromptText("App Password (created in Bluesky settings)");
+        appPasswordField.setPromptText("App Password");
+        styleTextField(appPasswordField);
 
-        Button loginButton = new Button("Login to Bluesky");  
+        Button loginButton = new Button("Login to Bluesky");
+        styleButton(loginButton);
         loginButton.setOnAction(e -> handleBlueskyLogin(usernameField.getText(), appPasswordField.getText()));
 
-        VBox form = new VBox(10, new Label("Username:"), usernameField,
-                             new Label("App Password:"), appPasswordField, loginButton);
-        form.setPadding(new Insets(20));
+        Button backButton = new Button("← Back to Platforms");
+        styleButton(backButton);
+        backButton.setOnAction(e -> showPlatformSelector());
 
-        tab.setContent(form);
-        return tab;
+        VBox form = new VBox(15, header, new Label("Username:"), usernameField,
+                new Label("App Password:"), appPasswordField, loginButton, backButton);
+        form.setAlignment(Pos.CENTER);
+
+        loginFormContainer.getChildren().add(form);
     }
 
-    private Tab createMastodonTab() {
-        Tab tab = new Tab("Mastodon");
+    private void showMastodonLoginForm() {
+        loginFormContainer.getChildren().clear();
+
+        Label header = new Label("Log in to Mastodon");
+        header.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #005fa3;");
 
         TextField instanceUrlField = new TextField();
         instanceUrlField.setPromptText("Instance URL (e.g., https://mastodon.social)");
+        styleTextField(instanceUrlField);
 
         TextField clientIdField = new TextField();
-        clientIdField.setPromptText("Client ID (register app on your instance)");
+        clientIdField.setPromptText("Client ID");
+        styleTextField(clientIdField);
 
         PasswordField clientSecretField = new PasswordField();
         clientSecretField.setPromptText("Client Secret");
+        styleTextField(clientSecretField);
 
         Button loginButton = new Button("Login to Mastodon");
+        styleButton(loginButton);
         loginButton.setOnAction(e -> handleMastodonLogin(
-            instanceUrlField.getText(),
-            clientIdField.getText(),
-            clientSecretField.getText()
+                instanceUrlField.getText(),
+                clientIdField.getText(),
+                clientSecretField.getText()
         ));
 
-        VBox form = new VBox(10,
-            new Label("Instance URL:"), instanceUrlField,
-            new Label("Client ID:"), clientIdField,
-            new Label("Client Secret:"), clientSecretField,
-            loginButton
-        );
-        form.setPadding(new Insets(20));
+        Button backButton = new Button("← Back to Platforms");
+        styleButton(backButton);
+        backButton.setOnAction(e -> showPlatformSelector());
 
-        tab.setContent(form);
-        return tab;
+        VBox form = new VBox(15, header, new Label("Instance URL:"), instanceUrlField,
+                new Label("Client ID:"), clientIdField,
+                new Label("Client Secret:"), clientSecretField,
+                loginButton, backButton);
+        form.setAlignment(Pos.CENTER);
+
+        loginFormContainer.getChildren().add(form);
+    }
+
+    private void styleTextField(TextField field) {
+        field.setPrefWidth(300);
+        field.setStyle("""
+            -fx-background-color: white;
+            -fx-border-color: #007acc;
+            -fx-border-width: 2;
+            -fx-border-radius: 5;
+            -fx-background-radius: 5;
+            -fx-padding: 8;
+        """);
+    }
+
+    private void styleButton(Button btn) {
+        btn.setStyle("""
+            -fx-background-color: #ffffffff;
+            -fx-text-fill: #005fa3;
+            -fx-font-weight: bold;
+            -fx-padding: 10 20;
+            -fx-border-radius: 5;
+            -fx-background-radius: 5;
+        """);
+        btn.setOnMouseEntered(e -> btn.setStyle(btn.getStyle() + " -fx-background-color: #c7e7fdff;"));
+        btn.setOnMouseExited(e -> btn.setStyle(btn.getStyle().replace("-fx-background-color: #c7e7fdff;", "-fx-background-color: #ffffff;")));
+    }
+
+    private void styleBigButton(Button btn) {
+        btn.setStyle("""
+            -fx-background-color: #ffffffff;
+            -fx-text-fill: #005fa3;
+            -fx-font-size: 18px;
+            -fx-font-weight: bold;
+            -fx-padding: 15 40;
+            -fx-border-radius: 10;
+            -fx-background-radius: 10;
+            -fx-alignment: center-left;
+        """);
+        btn.setOnMouseEntered(e -> btn.setStyle(btn.getStyle() + " -fx-background-color: #c7e7fdff;"));
+        btn.setOnMouseExited(e -> btn.setStyle(btn.getStyle().replace("-fx-background-color: #c7e7fdff;", "-fx-background-color: #ffffff;")));
     }
 
     private void handleBlueskyLogin(String username, String appPassword) {
@@ -88,11 +205,7 @@ public class HelloFX extends Application {
             statusLabel.setText("❌ Bluesky: Please fill in all fields.");
             return;
         }
-
-        // TODO: Call Bluesky API to authenticate
         statusLabel.setText("✅ Bluesky login placeholder — to be implemented.");
-
-        // Later: Use HttpClient to POST to https://bsky.social/xrpc/com.atproto.server.createSession
         System.out.println("Bluesky Login Attempt: " + username);
     }
 
@@ -101,11 +214,7 @@ public class HelloFX extends Application {
             statusLabel.setText("❌ Mastodon: Please fill in all fields.");
             return;
         }
-
-        // TODO: Start OAuth flow or use client credentials
         statusLabel.setText("✅ Mastodon login placeholder — to be implemented.");
-
-        // Later: Redirect to instanceUrl + "/oauth/authorize?client_id=..."
         System.out.println("Mastodon Login Attempt: " + instanceUrl);
     }
 
