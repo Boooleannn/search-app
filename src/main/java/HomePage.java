@@ -1,3 +1,4 @@
+
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -5,11 +6,17 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 
+
+
 public class HomePage extends BorderPane {
     private VBox sidebarContent;
     private boolean sidebarExpanded = true;
 
-    public HomePage(String platform, Runnable onGoBack) {
+    public HomePage(String platform, 
+                    Runnable onGoBack,
+                    Runnable onBlueskyLogin,
+                    Runnable onMastodonLogin
+                    ) {
         // Top search bar (same as before)
         HBox searchBar = new HBox(10);
         searchBar.setPadding(new Insets(20, 20, 10, 20));
@@ -30,6 +37,7 @@ public class HomePage extends BorderPane {
         Button goBackButton = new Button("Go Back");
         goBackButton.setStyle("-fx-background-radius: 20;");
         goBackButton.setOnAction(e -> {
+            System.out.println("Bluesky sidebar button clicked");
             if (onGoBack != null) onGoBack.run();
         });
         searchBar.getChildren().add(goBackButton);
@@ -74,19 +82,41 @@ public class HomePage extends BorderPane {
         sidebarContent.setAlignment(Pos.TOP_CENTER);
         sidebarContent.setPrefWidth(220);
 
-        HBox mastodonBox = new HBox(10);
-        ImageView mastodonIcon = new ImageView(new Image(getClass().getResourceAsStream("/images/mastodon.svg.png")));
-        mastodonIcon.setFitHeight(32);
-        mastodonIcon.setFitWidth(32);
-        Label mastodonLabel = new Label("NO ACTIVE ACCOUNT");
-        mastodonBox.getChildren().addAll(mastodonIcon, mastodonLabel);
 
-        HBox blueskyBox = new HBox(10);
-        ImageView blueskyIcon = new ImageView(new Image(getClass().getResourceAsStream("/images/Bluesky_Logo.png")));
-        blueskyIcon.setFitHeight(32);
-        blueskyIcon.setFitWidth(32);
-        Label blueskyLabel = new Label("Philip");
-        blueskyBox.getChildren().addAll(blueskyIcon, blueskyLabel);
+        Image blueskyImage = new Image(getClass().getResourceAsStream("/images/Bluesky_Logo.png"));
+        Image mastodonImage = new Image(getClass().getResourceAsStream("/images/mastodon.svg.png"));
+
+        ImageView blueskyView = new ImageView(blueskyImage);
+        blueskyView.setFitHeight(40);
+        blueskyView.setFitWidth(40);
+        blueskyView.setPreserveRatio(true);
+
+        ImageView mastodonView = new ImageView(mastodonImage);
+        mastodonView.setFitHeight(40);
+        mastodonView.setFitWidth(40);
+        mastodonView.setPreserveRatio(true);
+
+        // Bluesky Button with Image
+        Button blueskyButton = new Button("", blueskyView);
+        MainPage.styleBigButton(blueskyButton);
+        blueskyButton.setOnAction(e -> {
+            if (onBlueskyLogin != null) onBlueskyLogin.run();
+        });
+
+        blueskyButton.setAlignment(Pos.CENTER_LEFT);
+        blueskyButton.setContentDisplay(ContentDisplay.LEFT);
+
+        // Mastodon Button with Image
+        Button mastodonButton = new Button("", mastodonView);
+        mastodonButton.setGraphic(mastodonView);
+        MainPage.styleBigButton(mastodonButton);
+        mastodonButton.setOnAction(e -> {
+            if (onMastodonLogin != null) onMastodonLogin.run();
+        });
+        mastodonButton.setAlignment(Pos.CENTER_RIGHT);
+        mastodonButton.setContentDisplay(ContentDisplay.LEFT);
+
+
 
         Label trendingLabel = new Label("Trending");
         trendingLabel.setStyle("-fx-font-size: 24; -fx-font-weight: bold;");
@@ -95,7 +125,7 @@ public class HomePage extends BorderPane {
         Button uvleButton = new Button("UVLE");
         uvleButton.setStyle("-fx-background-radius: 20;");
 
-        sidebarContent.getChildren().addAll(mastodonBox, blueskyBox, trendingBox, uvleButton);
+        sidebarContent.getChildren().addAll(mastodonButton, blueskyButton, trendingBox, uvleButton);
 
         // Sidebar wrapper with toggle button
         VBox sidebarWrapper = new VBox(10);

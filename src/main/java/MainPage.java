@@ -9,8 +9,7 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.stage.Stage;
 
-
-public class HelloFX extends Application {
+public class MainPage extends Application {
 
     private BorderPane root;
     private VBox loginFormContainer;
@@ -20,34 +19,31 @@ public class HelloFX extends Application {
     public void start(Stage stage) {
         stage.setTitle("Social Search: Bluesky + Mastodon");
 
-        // Status Label
         statusLabel = new Label("Select a platform to log in.");
         statusLabel.setStyle("-fx-text-fill: #007acc; -fx-font-weight: bold;");
 
-        // Login Form Container
         loginFormContainer = new VBox();
         loginFormContainer.setAlignment(Pos.CENTER);
         loginFormContainer.setPadding(new Insets(40));
         loginFormContainer.setSpacing(20);
 
-        // Show Platform Selector (Buttons)
-        showPlatformSelector();
 
-        // Root Layout
         root = new BorderPane();
         root.setCenter(loginFormContainer);
         root.setBottom(statusLabel);
         BorderPane.setMargin(statusLabel, new Insets(10));
-
-        // Blue Theme Background
         root.setStyle("-fx-background-color: #f0f8ff;");
+
+        // Show Platform Selector (Buttons)
+        showPlatformSelector();
+
 
         Scene scene = new Scene(root, 800, 500);
         stage.setScene(scene);
         stage.show();
     }
 
-    private void showPlatformSelector() {
+    public void showPlatformSelector() {
         loginFormContainer.getChildren().clear();
 
         Label titleLabel = new Label("Choose Platform to Log In");
@@ -90,9 +86,10 @@ public class HelloFX extends Application {
         selector.setAlignment(Pos.CENTER);
 
         loginFormContainer.getChildren().addAll(selector);
+        root.setCenter(loginFormContainer);
     }
 
-    private void showBlueskyLoginForm() {
+    public void showBlueskyLoginForm() {
         loginFormContainer.getChildren().clear();
 
         Label header = new Label("Log in to Bluesky");
@@ -119,9 +116,10 @@ public class HelloFX extends Application {
         form.setAlignment(Pos.CENTER);
 
         loginFormContainer.getChildren().add(form);
+        root.setCenter(loginFormContainer);
     }
 
-    private void showMastodonLoginForm() {
+    public void showMastodonLoginForm() {
         loginFormContainer.getChildren().clear();
 
         Label header = new Label("Log in to Mastodon");
@@ -158,9 +156,10 @@ public class HelloFX extends Application {
         form.setAlignment(Pos.CENTER);
 
         loginFormContainer.getChildren().add(form);
+        root.setCenter(loginFormContainer);
     }
 
-    private void styleTextField(TextField field) {
+    public static void styleTextField(TextField field) {
         field.setPrefWidth(300);
         field.setStyle("""
             -fx-background-color: white;
@@ -172,7 +171,7 @@ public class HelloFX extends Application {
         """);
     }
 
-    private void styleButton(Button btn) {
+    public static void styleButton(Button btn) {
         btn.setStyle("""
             -fx-background-color: #ffffffff;
             -fx-text-fill: #005fa3;
@@ -185,7 +184,7 @@ public class HelloFX extends Application {
         btn.setOnMouseExited(e -> btn.setStyle(btn.getStyle().replace("-fx-background-color: #c7e7fdff;", "-fx-background-color: #ffffff;")));
     }
 
-    private void styleBigButton(Button btn) {
+    public static void styleBigButton(Button btn) {
         btn.setStyle("""
             -fx-background-color: #ffffffff;
             -fx-text-fill: #005fa3;
@@ -200,7 +199,7 @@ public class HelloFX extends Application {
         btn.setOnMouseExited(e -> btn.setStyle(btn.getStyle().replace("-fx-background-color: #c7e7fdff;", "-fx-background-color: #ffffff;")));
     }
 
-    private void handleBlueskyLogin(String username, String appPassword) {
+    public void handleBlueskyLogin(String username, String appPassword) {
         if (username.isEmpty() || appPassword.isEmpty()) {
             statusLabel.setText("❌ Bluesky: Please fill in all fields.");
             return;
@@ -208,10 +207,13 @@ public class HelloFX extends Application {
         statusLabel.setText("✅ Bluesky login placeholder — to be implemented.");
         System.out.println("Bluesky Login Attempt: " + username);
         // Redirect to homepage
-        root.setCenter(new HomePage("bluesky", this::showLoginPage));
-    }
+        root.setCenter(new HomePage("bluesky",
+                                    this::showPlatformSelector,
+                                    this::showBlueskyLoginForm,
+                                    this::showMastodonLoginForm));
+        }
 
-    private void handleMastodonLogin(String instanceUrl, String clientId, String clientSecret) {
+    public void handleMastodonLogin(String instanceUrl, String clientId, String clientSecret) {
         if (instanceUrl.isEmpty() || clientId.isEmpty() || clientSecret.isEmpty()) {
             statusLabel.setText("❌ Mastodon: Please fill in all fields.");
             return;
@@ -219,15 +221,17 @@ public class HelloFX extends Application {
         statusLabel.setText("✅ Mastodon login placeholder — to be implemented.");
         System.out.println("Mastodon Login Attempt: " + instanceUrl);
         // Redirect to homepage
-        root.setCenter(new HomePage("mastodon", this::showLoginPage));
+        root.setCenter(new HomePage("mastodon", 
+                                    this::showPlatformSelector,
+                                    this::showBlueskyLoginForm,
+                                    this::showMastodonLoginForm));
     }
+
+    public void showLoginPage() {
+        root.setCenter(loginFormContainer);
+    }
+
     public static void main(String[] args) {
         launch(args);
-    }
-    // ...existing code...
-
-    private void showLoginPage() {
-        // Show the login form again
-        root.setCenter(loginFormContainer);
     }
 }

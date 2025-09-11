@@ -13,7 +13,7 @@ javafx {
 }
 
 application {
-    mainClass = 'HelloFX'
+    mainClass = 'MainPage'
 }
 
 java {
@@ -22,7 +22,6 @@ java {
     }
 }
 
-// ✅ Modern way to create a fat JAR without Shadow plugin
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
