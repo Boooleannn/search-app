@@ -1,6 +1,7 @@
 plugins {
     id 'application'
     id 'org.openjfx.javafxplugin' version '0.1.0'
+    id 'distribution'
 }
 
 repositories {
@@ -26,29 +27,25 @@ tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
-tasks.register('fatJar', Jar) {
-    archiveBaseName = 'search-app'
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    manifest {
-        attributes(
-            'Main-Class': 'HelloFX',
-            'Add-Opens': 'javafx.graphics/com.sun.javafx.application=ALL-UNNAMED'
-        )
+// Configure distribution
+distributions {
+    main {
+        contents {
+            duplicatesStrategy = DuplicatesStrategy.EXCLUDE 
+            from(jar) // your main JAR
+            into('lib') {
+                from(configurations.runtimeClasspath) // all dependencies including JavaFX
+                from('/path/to/javafx-sdk-21.0.1/lib')
+            }
+        }
     }
-    from sourceSets.main.output
-    dependsOn configurations.runtimeClasspath
+}
 
-    // Include all dependencies (including JavaFX)
-    from {
-        configurations.runtimeClasspath
-            .findAll { it.name.startsWith('javafx-') }
-            .collect { zipTree(it) }
-    }
-
-    // Include all other dependencies
-    from {
-        configurations.runtimeClasspath
-            .findAll { !it.name.startsWith('javafx-') }
-            .collect { it.isDirectory() ? it : zipTree(it) }
-    }
+// Create start script that sets up JavaFX properly
+startScripts {
+    applicationName = 'search-app'
+    defaultJvmOpts = [
+        '--module-path', "lib/javafx-base-21.0.1-mac.jar:lib/javafx-controls-21.0.1-mac.jar:lib/javafx-fxml-21.0.1-mac.jar:lib/javafx-graphics-21.0.1-mac.jar",
+        '--add-modules', 'javafx.controls,javafx.fxml'
+    ]
 }
