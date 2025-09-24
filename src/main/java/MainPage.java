@@ -8,6 +8,11 @@ import javafx.scene.paint.Color;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.stage.Stage;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import javafx.application.Platform;
 
 public class MainPage extends Application {
 
@@ -125,40 +130,52 @@ public class MainPage extends Application {
         Label header = new Label("Log in to Mastodon");
         header.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #005fa3;");
 
-        TextField instanceUrlField = new TextField();
-        instanceUrlField.setPromptText("Instance URL (e.g., https://mastodon.social)");
-        styleTextField(instanceUrlField);
+        final String clientId = "Brprugq5WGk2ViI214TmKUx-cddPx2Fpu13ZxMyxIUo";
+        final String clientSecret = "CCOxk0cpE83rEHX5FyJtIWUc8wdqKx5Oqfz0gCvb7Rg";
 
-        TextField clientIdField = new TextField();
-        clientIdField.setPromptText("Client ID");
-        styleTextField(clientIdField);
 
-        PasswordField clientSecretField = new PasswordField();
-        clientSecretField.setPromptText("Client Secret");
-        styleTextField(clientSecretField);
+        Button openBrowserButton = new Button("Open Mastodon Login in Browser");
+        styleButton(openBrowserButton);
 
-        Button loginButton = new Button("Login to Mastodon");
-        styleButton(loginButton);
-        loginButton.setOnAction(e -> handleMastodonLogin(
-                instanceUrlField.getText(),
-                clientIdField.getText(),
-                clientSecretField.getText()
-        ));
+        TextField codeField = new TextField();
+        codeField.setPromptText("Paste authorization code here");
+        styleTextField(codeField);
+
+        Button exchangeButton = new Button("Exchange Code for Token");
+        styleButton(exchangeButton);
 
         Button backButton = new Button("← Back to Platforms");
         styleButton(backButton);
         backButton.setOnAction(e -> showPlatformSelector());
 
-        VBox form = new VBox(15, header, new Label("Instance URL:"), instanceUrlField,
-                new Label("Client ID:"), clientIdField,
-                new Label("Client Secret:"), clientSecretField,
-                loginButton, backButton);
+        openBrowserButton.setOnAction(e -> {
+            String redirectUri = "urn:ietf:wg:oauth:2.0:oob";
+            String authUrl = "https://mastodon.social/oauth/authorize"
+                    + "?client_id=" + clientId
+                    + "&redirect_uri=" + redirectUri
+                    + "&response_type=code"
+                    + "&scope=read";
+            getHostServices().showDocument(authUrl);
+        });
+
+        exchangeButton.setOnAction(e -> {
+            handleMastodonOAuthCode(
+                clientId,
+                clientSecret,
+                codeField.getText()
+            );
+        });
+
+        VBox form = new VBox(15, header,
+                openBrowserButton,
+                new Label("Paste Code:"), codeField,
+                exchangeButton,
+                backButton);
         form.setAlignment(Pos.CENTER);
 
         loginFormContainer.getChildren().add(form);
         root.setCenter(loginFormContainer);
     }
-
     public static void styleTextField(TextField field) {
         field.setPrefWidth(300);
         field.setStyle("""
@@ -204,28 +221,72 @@ public class MainPage extends Application {
             statusLabel.setText("❌ Bluesky: Please fill in all fields.");
             return;
         }
-        statusLabel.setText("✅ Bluesky login placeholder — to be implemented.");
-        System.out.println("Bluesky Login Attempt: " + username);
-        // Redirect to homepage
-        root.setCenter(new HomePage("bluesky",
-                                    this::showPlatformSelector,
-                                    this::showBlueskyLoginForm,
-                                    this::showMastodonLoginForm));
-        }
 
-    public void handleMastodonLogin(String instanceUrl, String clientId, String clientSecret) {
-        if (instanceUrl.isEmpty() || clientId.isEmpty() || clientSecret.isEmpty()) {
-            statusLabel.setText("❌ Mastodon: Please fill in all fields.");
-            return;
+        // Bluesky API endpoint
+        String apiUrl = "https://bsky.social/xrpc/com.atproto.server.createSession";
+        String jsonBody = String.format("{\"identifier\":\"%s\",\"password\":\"%s\"}", username, appPassword);
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(apiUrl))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+
+        client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenApply(HttpResponse::body)
+                .thenAccept(responseBody -> {
+                    // Check for success (look for "accessJwt" in response)
+                    if (responseBody.contains("accessJwt")) {
+                        Platform.runLater(() -> {
+                            statusLabel.setText("✅ Bluesky login successful!");
+                            root.setCenter(new HomePage("bluesky", this::showPlatformSelector, this::showBlueskyLoginForm, this::showMastodonLoginForm));
+                        });
+                    } else {
+                        Platform.runLater(() -> statusLabel.setText("❌ Bluesky login failed: " + responseBody));
+                    }
+                })
+                .exceptionally(e -> {
+                    Platform.runLater(() -> statusLabel.setText("❌ Bluesky login error: " + e.getMessage()));
+                    return null;
+                });
         }
-        statusLabel.setText("✅ Mastodon login placeholder — to be implemented.");
-        System.out.println("Mastodon Login Attempt: " + instanceUrl);
-        // Redirect to homepage
-        root.setCenter(new HomePage("mastodon", 
-                                    this::showPlatformSelector,
-                                    this::showBlueskyLoginForm,
-                                    this::showMastodonLoginForm));
-    }
+        public void handleMastodonOAuthCode(String clientId, String clientSecret, String code) {
+            if (clientId.isEmpty() || clientSecret.isEmpty() || code.isEmpty()) {
+                statusLabel.setText("❌ Please fill in all fields.");
+                return;
+            }
+            String tokenUrl = "https://mastodon.social/oauth/token";
+            String redirectUri = "urn:ietf:wg:oauth:2.0:oob";
+            String body = String.format(
+                "grant_type=authorization_code&client_id=%s&client_secret=%s&redirect_uri=%s&code=%s",
+                clientId, clientSecret, redirectUri, code
+            );
+
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(tokenUrl))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+
+            client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .thenApply(HttpResponse::body)
+                    .thenAccept(responseBody -> {
+                        if (responseBody.contains("access_token")) {
+                            Platform.runLater(() -> {
+                                statusLabel.setText("✅ Mastodon login successful!");
+                                root.setCenter(new HomePage("mastodon", this::showPlatformSelector, this::showBlueskyLoginForm, this::showMastodonLoginForm));
+                            });
+                        } else {
+                            Platform.runLater(() -> statusLabel.setText("❌ Mastodon login failed: " + responseBody));
+                        }
+                    })
+                    .exceptionally(e -> {
+                        Platform.runLater(() -> statusLabel.setText("❌ Mastodon login error: " + e.getMessage()));
+                        return null;
+                    });
+            }
 
     public void showLoginPage() {
         root.setCenter(loginFormContainer);
