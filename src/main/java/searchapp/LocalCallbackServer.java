@@ -6,11 +6,11 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import java.util.Arrays;
 
 public class LocalCallbackServer {
 
@@ -34,11 +34,19 @@ public class LocalCallbackServer {
                 // Save the callback result
                 callbackFuture.complete(new CallbackResult(code, state, iss));
 
-                // Respond to the browser
+                // Prepare the HTML response
                 String response = "<html><body><h1>Login successful!</h1><p>You can close this window.</p></body></html>";
-                exchange.sendResponseHeaders(200, response.getBytes().length);
-                exchange.getResponseBody().write(response.getBytes());
-                exchange.getResponseBody().close();
+                byte[] responseBytes = response.getBytes(StandardCharsets.UTF_8);
+
+                // Send the response
+                exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
+                exchange.getResponseHeaders().set("Cache-Control", "no-store");
+                exchange.sendResponseHeaders(200, responseBytes.length);
+
+                try (var os = exchange.getResponseBody()) {
+                    os.write(responseBytes);
+                    os.flush();
+                }
 
                 // Stop the server
                 stop();
@@ -83,8 +91,8 @@ public class LocalCallbackServer {
         return Arrays.stream(query.split("&"))
                 .map(param -> param.split("=", 2))
                 .collect(Collectors.toMap(
-                        pair -> URLDecoder.decode(pair[0], StandardCharsets.UTF_8),
-                        pair -> URLDecoder.decode(pair[1], StandardCharsets.UTF_8)
+                        (String[] pair) -> URLDecoder.decode(pair[0], StandardCharsets.UTF_8),
+                        (String[] pair) -> URLDecoder.decode(pair[1], StandardCharsets.UTF_8)
                 ));
     }
 

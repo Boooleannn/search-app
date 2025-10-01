@@ -17,6 +17,7 @@ import java.net.http.HttpResponse;
 import javafx.application.Platform;
 import searchapp.PkceUtil;
 import searchapp.DPoPUtil;
+import searchapp.LocalCallbackServer;
 import searchapp.BlueskyUtil;
 
 public class MainPage extends Application {
@@ -24,6 +25,7 @@ public class MainPage extends Application {
     private BorderPane root;
     private VBox loginFormContainer;
     private Label statusLabel;
+    private LocalCallbackServer server;
 
     @Override
     public void start(Stage stage) {
@@ -183,6 +185,10 @@ public class MainPage extends Application {
                                         return;
                                     }
 
+                                    // Start the LocalCallbackServer
+                                    server = new LocalCallbackServer(); // Initialize the server
+                                    server.start();
+
                                     // Build the authorization URL
                                     String authorize = "https://bsky.social/oauth/authorize"
                                             + "?client_id=" + java.net.URLEncoder.encode(clientId, java.nio.charset.StandardCharsets.UTF_8)
@@ -199,8 +205,40 @@ public class MainPage extends Application {
                                     }
 
                                     Platform.runLater(() -> statusLabel.setText("✅ Opening Bluesky login..."));
+
+                                    // Wait for the callback
+                                    LocalCallbackServer.CallbackResult cb = server.awaitAuthorizationCode(120); // Wait up to 120 seconds
+
+                                    if (cb == null) {
+                                        Platform.runLater(() -> statusLabel.setText("❌ No callback received (timeout)."));
+                                        server.stop(); // Stop the server after timeout
+                                        return;
+                                    }
+
+                                    // Verify the state
+                                    if (!state.equals(cb.state())) {
+                                        Platform.runLater(() -> statusLabel.setText("❌ State mismatch; aborting."));
+                                        server.stop(); // Stop the server after state mismatch
+                                        return;
+                                    }
+
+                                    // Exchange the code for tokens
+                                    BlueskyUtil.exchangeCodeForTokens(cb.code(), codeVerifier, clientId, redirectUri, new BlueskyUtil.BlueskyCallback() {
+                                        @Override
+                                        public void onSuccess(BlueskyUtil.TokenSet tokenSet) {
+                                            Platform.runLater(() -> statusLabel.setText("✅ Login successful! Access token: " + tokenSet.accessToken));
+                                            server.stop(); // Stop the server after successful token exchange
+                                        }
+
+                                        @Override
+                                        public void onError(String errorMessage) {
+                                            Platform.runLater(() -> statusLabel.setText("❌ Token exchange failed: " + errorMessage));
+                                            server.stop(); // Stop the server after token exchange failure
+                                        }
+                                    });
                                 } catch (Exception ex) {
                                     Platform.runLater(() -> statusLabel.setText("❌ Error parsing PAR response: " + ex.getMessage()));
+                                    server.stop(); // Stop the server after parsing error
                                 }
                             } else {
                                 Platform.runLater(() -> statusLabel.setText("❌ PAR failed: " + body));
