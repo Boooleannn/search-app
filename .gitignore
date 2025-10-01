@@ -1,0 +1,31 @@
+# Gradle build files
+.gradle/
+build/
+
+# IDE-specific files
+.vscode/
+*.iml
+.idea/
+out/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.lock
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# JAR, WAR, and other compiled files
+*.jar
+*.war
+*.class
+
+# Generated files
+bin/
+generated/
+
+# Distribution files
+install/
+distributions/

@@ -1,7 +1,0 @@
-Manifest-Version: 1.0
-Main-Class: MainPage
-Add-Opens: javafx.graphics/com.sun.javafx.application=ALL-UNNAMED
-Class-Path: libs/javafx-fxml-21.0.1-mac.jar libs/javafx-controls-21.0.1-
- mac.jar libs/javafx-graphics-21.0.1-mac.jar libs/javafx-base-21.0.1-mac
- .jar
-
