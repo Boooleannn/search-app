@@ -8,11 +8,16 @@ import javafx.scene.paint.Color;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.stage.Stage;
+
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import javafx.application.Platform;
+import searchapp.PkceUtil;
+import searchapp.DPoPUtil;
+import searchapp.BlueskyUtil;
 
 public class MainPage extends Application {
 
@@ -89,7 +94,6 @@ public class MainPage extends Application {
 
         VBox selector = new VBox(40, titleLabel, buttonBox);
         selector.setAlignment(Pos.CENTER);
-
         loginFormContainer.getChildren().addAll(selector);
         root.setCenter(loginFormContainer);
     }
@@ -100,29 +104,134 @@ public class MainPage extends Application {
         Label header = new Label("Log in to Bluesky");
         header.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #005fa3;");
 
-        TextField usernameField = new TextField();
-        usernameField.setPromptText("Username (e.g., user.bsky.social)");
-        styleTextField(usernameField);
-
-        PasswordField appPasswordField = new PasswordField();
-        appPasswordField.setPromptText("App Password");
-        styleTextField(appPasswordField);
-
-        Button loginButton = new Button("Login to Bluesky");
-        styleButton(loginButton);
-        loginButton.setOnAction(e -> handleBlueskyLogin(usernameField.getText(), appPasswordField.getText()));
+        Button openBrowserButton = new Button("Open Bluesky Login in Browser");
+        styleButton(openBrowserButton);
 
         Button backButton = new Button("← Back to Platforms");
         styleButton(backButton);
         backButton.setOnAction(e -> showPlatformSelector());
 
-        VBox form = new VBox(15, header, new Label("Username:"), usernameField,
-                new Label("App Password:"), appPasswordField, loginButton, backButton);
+        openBrowserButton.setOnAction(e -> {
+            try {
+                String codeVerifier = PkceUtil.generateCodeVerifier();
+                String codeChallenge = PkceUtil.generateCodeChallenge(codeVerifier);
+
+                final String parUrl = "https://bsky.social/oauth/par";
+                String clientId = "https://grjimenez.github.io/bluesky-oauth-client/client-metadata.json";
+                String redirectUri = "http://127.0.0.1:8080/callback";
+                String state = "random-state-value"; // Generate a random state value for CSRF protection
+
+                // Build the request body
+                String parBody = String.format(
+                    "client_id=%s&redirect_uri=%s&response_type=code&scope=atproto&state=%s&code_challenge=%s&code_challenge_method=S256",
+                    clientId, redirectUri, state, codeChallenge
+                );
+
+                HttpClient client = HttpClient.newHttpClient();
+
+                // First attempt
+                String dpop1 = DPoPUtil.buildDPoP("POST", parUrl, null);
+                HttpRequest firstRequest = HttpRequest.newBuilder()
+                        .uri(URI.create(parUrl))
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .header("DPoP", dpop1)
+                        .POST(HttpRequest.BodyPublishers.ofString(parBody))
+                        .build();
+
+                client.sendAsync(firstRequest, HttpResponse.BodyHandlers.ofString())
+                        .thenCompose(resp -> {
+                            System.out.println("[PAR#1] " + resp.statusCode());
+                            System.out.println("[PAR#1] headers=" + resp.headers().map());
+                            System.out.println("[PAR#1] body=" + resp.body());
+
+                            boolean is401 = resp.statusCode() == 401;
+                            boolean isNonce400 = resp.statusCode() == 400 && resp.body() != null && resp.body().contains("\"use_dpop_nonce\"");
+                            if (is401 || isNonce400) {
+                                String nonce = resp.headers().firstValue("DPoP-Nonce")
+                                        .orElse(resp.headers().firstValue("dpop-nonce").orElse(""));
+                                if (!nonce.isEmpty()) {
+                                    String dpop2 = DPoPUtil.buildDPoP("POST", parUrl, nonce);
+                                    HttpRequest retryRequest = HttpRequest.newBuilder()
+                                            .uri(URI.create(parUrl))
+                                            .header("Content-Type", "application/x-www-form-urlencoded")
+                                            .header("DPoP", dpop2)
+                                            .POST(HttpRequest.BodyPublishers.ofString(parBody))
+                                            .build();
+                                    return client.sendAsync(retryRequest, HttpResponse.BodyHandlers.ofString())
+                                            .thenApply(r -> {
+                                                System.out.println("[PAR#2] " + r.statusCode());
+                                                System.out.println("[PAR#2] headers=" + r.headers().map());
+                                                System.out.println("[PAR#2] body=" + r.body());
+                                                return r;
+                                            });
+                                }
+                            }
+                            return java.util.concurrent.CompletableFuture.completedFuture(resp);
+                        })
+                        .thenAccept(response -> {
+                            int sc = response.statusCode();
+                            String body = response.body();
+                            System.out.println("HTTP Status: " + sc);
+                            System.out.println("HTTP Body: " + body);
+
+                            if (sc == 200 || sc == 201) {
+                                try {
+                                    // Parse the request_uri from the JSON response
+                                    String requestUri = BlueskyUtil.parseRequestUri(body); // Ensure parseRequestUri is robust
+                                    if (requestUri == null || requestUri.isBlank()) {
+                                        Platform.runLater(() -> statusLabel.setText("❌ PAR ok but missing request_uri"));
+                                        return;
+                                    }
+
+                                    // Build the authorization URL
+                                    String authorize = "https://bsky.social/oauth/authorize"
+                                            + "?client_id=" + java.net.URLEncoder.encode(clientId, java.nio.charset.StandardCharsets.UTF_8)
+                                            + "&request_uri=" + java.net.URLEncoder.encode(requestUri, java.nio.charset.StandardCharsets.UTF_8);
+
+                                    // Open the browser
+                                    try {
+                                        getHostServices().showDocument(authorize);
+                                    } catch (Exception ex) {
+                                        try {
+                                            java.awt.Desktop.getDesktop().browse(java.net.URI.create(authorize));
+                                        } catch (Exception ignored) {
+                                        }
+                                    }
+
+                                    Platform.runLater(() -> statusLabel.setText("✅ Opening Bluesky login..."));
+                                } catch (Exception ex) {
+                                    Platform.runLater(() -> statusLabel.setText("❌ Error parsing PAR response: " + ex.getMessage()));
+                                }
+                            } else {
+                                Platform.runLater(() -> statusLabel.setText("❌ PAR failed: " + body));
+                            }
+                        })
+                        .exceptionally(ex -> {
+                            Platform.runLater(() -> statusLabel.setText("❌ PAR error: " + ex.getMessage()));
+                            return null;
+                        });
+            } catch (Exception ex) {
+                statusLabel.setText("❌ Error: " + ex.getMessage());
+            }
+        });
+
+        VBox form = new VBox(15, header, openBrowserButton, backButton);
         form.setAlignment(Pos.CENTER);
 
         loginFormContainer.getChildren().add(form);
         root.setCenter(loginFormContainer);
     }
+    private String extractNonce(String wwwAuthenticate) {
+        try {
+            int start = wwwAuthenticate.indexOf("nonce=\"") + 7;
+            int end = wwwAuthenticate.indexOf("\"", start);
+            return wwwAuthenticate.substring(start, end);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to extract DPoP nonce", e);
+        }
+    }
+    
+    
 
     public void showMastodonLoginForm() {
         loginFormContainer.getChildren().clear();
