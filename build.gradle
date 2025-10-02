@@ -55,3 +55,17 @@ startScripts {
         '--add-modules', 'javafx.controls,javafx.fxml'
     ]
 }
+
+jar {
+    manifest {
+        attributes(
+            'Main-Class': 'EntryPoint',
+            'Add-Opens': 'javafx.graphics/javafx.scene=ALL-UNNAMED'
+        )
+    }
+    from {
+        configurations.runtimeClasspath.collect { 
+            it.isDirectory() ? it : zipTree(it) }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
