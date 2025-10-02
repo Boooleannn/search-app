@@ -226,7 +226,16 @@ public class MainPage extends Application {
                                     BlueskyUtil.exchangeCodeForTokens(cb.code(), codeVerifier, clientId, redirectUri, new BlueskyUtil.BlueskyCallback() {
                                         @Override
                                         public void onSuccess(BlueskyUtil.TokenSet tokenSet) {
-                                            Platform.runLater(() -> statusLabel.setText("✅ Login successful! Access token: " + tokenSet.accessToken));
+                                            String accessToken = tokenSet.accessToken; // Extract the access token
+                                            Platform.runLater(() -> {
+                                                statusLabel.setText("✅ Login successful!");
+                                                root.setCenter(new HomePage(
+                                                    "bluesky", 
+                                                    MainPage.this::showPlatformSelector, 
+                                                    MainPage.this::showBlueskyLoginForm, 
+                                                    MainPage.this::showMastodonLoginForm
+                                                ));
+                                            });
                                             server.stop(); // Stop the server after successful token exchange
                                         }
 
