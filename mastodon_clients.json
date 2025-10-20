@@ -1,0 +1,6 @@
+{"mastodon.social": {
+  "scope": "read",
+  "client_secret": "Z9nFHSdC9GYUFgw9sQT9hwVtbTHSe0w0ByzyxGA8dZs",
+  "redirect_uri": "http://127.0.0.1:8765/callback",
+  "client_id": "YQlmWzgNu9-TEad2-2agebj6GvU-7CU8T61oLNmNS7g"
+}}

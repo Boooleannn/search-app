@@ -16,12 +16,24 @@ public class LocalCallbackServer {
 
     private HttpServer server;
     private final CompletableFuture<CallbackResult> callbackFuture = new CompletableFuture<>();
+    private final int port;
+
+    // default keeps current behavior
+    public LocalCallbackServer() {
+        this.port = 8080;
+    }
+
+    // allow custom port for Mastodon (e.g. 8765)
+    public LocalCallbackServer(int port) {
+       this.port = port;
+    }
+
 
     /**
      * Starts the HTTP server on 127.0.0.1:8080 and listens for /callback requests.
      */
     public void start() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 8080), 0);
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.createContext("/callback", exchange -> {
             if ("GET".equals(exchange.getRequestMethod())) {
                 String query = exchange.getRequestURI().getQuery();

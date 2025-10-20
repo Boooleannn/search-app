@@ -8,7 +8,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.stage.Stage;
-
+import org.json.JSONObject;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -26,6 +26,10 @@ public class MainPage extends Application {
     private VBox loginFormContainer;
     private Label statusLabel;
     private LocalCallbackServer server;
+    private String mastodonAccessToken;
+    private String mastodonInstance;
+    private String mastodonAcct;
+    private String mastodonDisplayName;
 
     @Override
     public void start(Stage stage) {
@@ -283,53 +287,94 @@ public class MainPage extends Application {
     public void showMastodonLoginForm() {
         loginFormContainer.getChildren().clear();
 
-        Label header = new Label("Log in to Mastodon");
+        Label header = new Label("Sign in with Mastodon");
         header.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #005fa3;");
 
-        final String clientId = "Brprugq5WGk2ViI214TmKUx-cddPx2Fpu13ZxMyxIUo";
-        final String clientSecret = "CCOxk0cpE83rEHX5FyJtIWUc8wdqKx5Oqfz0gCvb7Rg";
+        TextField handleField = new TextField();
+        handleField.setPromptText("e.g. @user@mastodon.social or mastodon.social");
+        handleField.setPrefWidth(400);
 
-
-        Button openBrowserButton = new Button("Open Mastodon Login in Browser");
-        styleButton(openBrowserButton);
-
-        TextField codeField = new TextField();
-        codeField.setPromptText("Paste authorization code here");
-        styleTextField(codeField);
-
-        Button exchangeButton = new Button("Exchange Code for Token");
-        styleButton(exchangeButton);
+        Button signInBtn = new Button("Sign in with Mastodon");
+        styleButton(signInBtn);
 
         Button backButton = new Button("← Back to Platforms");
         styleButton(backButton);
         backButton.setOnAction(e -> showPlatformSelector());
 
-        openBrowserButton.setOnAction(e -> {
-            String redirectUri = "urn:ietf:wg:oauth:2.0:oob";
-            String authUrl = "https://mastodon.social/oauth/authorize"
-                    + "?client_id=" + clientId
-                    + "&redirect_uri=" + redirectUri
-                    + "&response_type=code"
-                    + "&scope=read";
-            getHostServices().showDocument(authUrl);
-        });
+        VBox v = new VBox(12, header, handleField, signInBtn, backButton);
+        v.setAlignment(Pos.CENTER);
 
-        exchangeButton.setOnAction(e -> {
-            handleMastodonOAuthCode(
-                clientId,
-                clientSecret,
-                codeField.getText()
+        signInBtn.setOnAction(e -> {
+            String input = handleField.getText();
+            if (input == null || input.isBlank()) {
+                statusLabel.setText("❌ Enter a Mastodon handle or instance.");
+                return;
+            }
+            signInBtn.setDisable(true);
+            statusLabel.setText("⏳ Starting Mastodon login...");
+            // ensure statusLabel is visible at bottom
+            root.setBottom(statusLabel);
+
+            auth.mastodon.MastodonAuth.startLoginWithHandle(input,
+                session -> { // onSuccess
+                    Platform.runLater(() -> {
+                        // store token + account info for later use
+                        mastodonAccessToken = session.accessToken;
+                        mastodonInstance = session.instance;
+                        mastodonAcct = session.account.acct != null ? session.account.acct : session.account.username;
+                        mastodonDisplayName = (session.account.displayName != null && !session.account.displayName.isBlank())
+                                ? session.account.displayName
+                               : session.account.username;
+
+                        // show a masked token and the user info so we can confirm login succeeded
+                        String acctShown = mastodonAcct.startsWith("@") ? mastodonAcct : "@" + mastodonAcct;
+                        String masked = maskToken(mastodonAccessToken);
+                        statusLabel.setText(String.format("✅ Logged in: %s (%s) on %s — token: %s",
+                                mastodonDisplayName, acctShown, mastodonInstance, masked));
+                        // choose display name (prefer displayName, fallback to username)
+                        String display = (session.account.displayName != null && !session.account.displayName.isBlank())
+                                ? session.account.displayName
+                                : session.account.username;
+
+                        // ensure acct is shown like @user or @user@host
+                        String acct = session.account.acct != null ? session.account.acct : session.account.username;
+                        if (!acct.startsWith("@")) acct = "@" + acct;
+
+                        String msg = String.format("✅ Logged in as %s (%s) on %s", display, acct, session.instance);
+                        statusLabel.setText(msg);
+
+                        // re-enable UI
+                        signInBtn.setDisable(false);
+
+                        // non-sensitive debug (do NOT print tokens)
+                        System.out.println("[mastodon] account id=" + session.account.id
+                                + " username=" + session.account.username
+                                + " acct=" + session.account.acct
+                                + " displayName=" + session.account.displayName
+                                + " instance=" + session.instance);
+
+                        Alert a = new Alert(Alert.AlertType.INFORMATION);
+                        a.setTitle("Mastodon Login");
+                        a.setHeaderText("Login successful");
+                        a.setContentText("Logged in as " + display + " (" + acct + ") on " + session.instance);
+                        a.showAndWait();
+                    });
+                },
+                err -> { // onError
+                    Platform.runLater(() -> {
+                        statusLabel.setText("❌ Mastodon login failed: " + err);
+                        signInBtn.setDisable(false);
+                        Alert a = new Alert(Alert.AlertType.ERROR);
+                        a.setTitle("Mastodon Login Error");
+                        a.setHeaderText("Login failed");
+                        a.setContentText(err);
+                        a.showAndWait();
+                    });
+                }
             );
         });
 
-        VBox form = new VBox(15, header,
-                openBrowserButton,
-                new Label("Paste Code:"), codeField,
-                exchangeButton,
-                backButton);
-        form.setAlignment(Pos.CENTER);
-
-        loginFormContainer.getChildren().add(form);
+        loginFormContainer.getChildren().add(v);
         root.setCenter(loginFormContainer);
     }
     public static void styleTextField(TextField field) {
@@ -343,7 +388,11 @@ public class MainPage extends Application {
             -fx-padding: 8;
         """);
     }
-
+    private static String maskToken(String t) {
+        if (t == null || t.isBlank()) return "(no-token)";
+        if (t.length() <= 12) return t;
+        return t.substring(0, 8) + "…" + t.substring(t.length() - 4);
+    }
     public static void styleButton(Button btn) {
         btn.setStyle("""
             -fx-background-color: #ffffffff;
