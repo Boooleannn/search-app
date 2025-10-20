@@ -358,6 +358,13 @@ public class MainPage extends Application {
                         a.setHeaderText("Login successful");
                         a.setContentText("Logged in as " + display + " (" + acct + ") on " + session.instance);
                         a.showAndWait();
+
+                        root.setCenter(new HomePage(
+                        "bluesky", 
+                        MainPage.this::showPlatformSelector, 
+                        MainPage.this::showBlueskyLoginForm, 
+                        MainPage.this::showMastodonLoginForm
+                                                ));
                     });
                 },
                 err -> { // onError
