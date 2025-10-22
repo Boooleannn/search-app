@@ -15,10 +15,12 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import javafx.application.Platform;
+import javafx.concurrent.Task;
 import searchapp.PkceUtil;
 import searchapp.DPoPUtil;
 import searchapp.LocalCallbackServer;
 import searchapp.BlueskyUtil;
+import javafx.scene.Node;
 
 public class MainPage extends Application {
 
@@ -30,6 +32,7 @@ public class MainPage extends Application {
     private String mastodonInstance;
     private String mastodonAcct;
     private String mastodonDisplayName;
+    private HomePage currentHomePage;
 
     @Override
     public void start(Stage stage) {
@@ -103,6 +106,7 @@ public class MainPage extends Application {
         loginFormContainer.getChildren().addAll(selector);
         root.setCenter(loginFormContainer);
     }
+
 
     public void showBlueskyLoginForm() {
         loginFormContainer.getChildren().clear();
@@ -233,12 +237,14 @@ public class MainPage extends Application {
                                             String accessToken = tokenSet.accessToken; // Extract the access token
                                             Platform.runLater(() -> {
                                                 statusLabel.setText("✅ Login successful!");
-                                                root.setCenter(new HomePage(
+                                                
+                                                currentHomePage = new HomePage(
                                                     "bluesky", 
                                                     MainPage.this::showPlatformSelector, 
                                                     MainPage.this::showBlueskyLoginForm, 
                                                     MainPage.this::showMastodonLoginForm
-                                                ));
+                                                    );
+                                                root.setCenter(currentHomePage);
                                             });
                                             server.stop(); // Stop the server after successful token exchange
                                         }
@@ -359,12 +365,13 @@ public class MainPage extends Application {
                         a.setContentText("Logged in as " + display + " (" + acct + ") on " + session.instance);
                         a.showAndWait();
 
-                        root.setCenter(new HomePage(
-                        "bluesky", 
-                        MainPage.this::showPlatformSelector, 
-                        MainPage.this::showBlueskyLoginForm, 
-                        MainPage.this::showMastodonLoginForm
-                                                ));
+                        currentHomePage = new HomePage(
+                                "mastodon", 
+                                MainPage.this::showPlatformSelector, 
+                                MainPage.this::showBlueskyLoginForm, 
+                                MainPage.this::showMastodonLoginForm
+                                );
+                        root.setCenter(currentHomePage);
                     });
                 },
                 err -> { // onError
@@ -452,7 +459,13 @@ public class MainPage extends Application {
                     if (responseBody.contains("accessJwt")) {
                         Platform.runLater(() -> {
                             statusLabel.setText("✅ Bluesky login successful!");
-                            root.setCenter(new HomePage("bluesky", this::showPlatformSelector, this::showBlueskyLoginForm, this::showMastodonLoginForm));
+                                currentHomePage = new HomePage(
+                                    "bluesky", 
+                                    MainPage.this::showPlatformSelector, 
+                                    MainPage.this::showBlueskyLoginForm, 
+                                    MainPage.this::showMastodonLoginForm
+                                );
+                                root.setCenter(currentHomePage); 
                         });
                     } else {
                         Platform.runLater(() -> statusLabel.setText("❌ Bluesky login failed: " + responseBody));
@@ -488,7 +501,13 @@ public class MainPage extends Application {
                         if (responseBody.contains("access_token")) {
                             Platform.runLater(() -> {
                                 statusLabel.setText("✅ Mastodon login successful!");
-                                root.setCenter(new HomePage("mastodon", this::showPlatformSelector, this::showBlueskyLoginForm, this::showMastodonLoginForm));
+                                currentHomePage = new HomePage(
+                                    "mastodon", 
+                                    MainPage.this::showPlatformSelector, 
+                                    MainPage.this::showBlueskyLoginForm, 
+                                    MainPage.this::showMastodonLoginForm
+                                );
+                                root.setCenter(currentHomePage); 
                             });
                         } else {
                             Platform.runLater(() -> statusLabel.setText("❌ Mastodon login failed: " + responseBody));
