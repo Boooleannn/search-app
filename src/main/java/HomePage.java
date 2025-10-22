@@ -15,7 +15,6 @@ public class HomePage extends BorderPane {
     private boolean sidebarExpanded = true;
     private VBox resultsArea;
 
-    // Constructor WITHOUT onSearch
     public HomePage(String platform,
                     Runnable onGoBack,
                     Runnable onBlueskyLogin,
