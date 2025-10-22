@@ -16,6 +16,8 @@ public class HomePage extends BorderPane {
     private VBox resultsArea;
 
     public HomePage(String platform,
+                    String blueskyAccessToken, 
+                    String mastodonAccessToken,  
                     Runnable onGoBack,
                     Runnable onBlueskyLogin,
                     Runnable onMastodonLogin) {

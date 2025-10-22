@@ -32,6 +32,7 @@ public class MainPage extends Application {
     private String mastodonInstance;
     private String mastodonAcct;
     private String mastodonDisplayName;
+    private String blueskyAccessToken;
     private HomePage currentHomePage;
 
     @Override
@@ -240,6 +241,8 @@ public class MainPage extends Application {
                                                 
                                                 currentHomePage = new HomePage(
                                                     "bluesky", 
+                                                    blueskyAccessToken,
+                                                    mastodonAccessToken,
                                                     MainPage.this::showPlatformSelector, 
                                                     MainPage.this::showBlueskyLoginForm, 
                                                     MainPage.this::showMastodonLoginForm
@@ -367,6 +370,8 @@ public class MainPage extends Application {
 
                         currentHomePage = new HomePage(
                                 "mastodon", 
+                                blueskyAccessToken,
+                                mastodonAccessToken,
                                 MainPage.this::showPlatformSelector, 
                                 MainPage.this::showBlueskyLoginForm, 
                                 MainPage.this::showMastodonLoginForm
@@ -461,6 +466,8 @@ public class MainPage extends Application {
                             statusLabel.setText("✅ Bluesky login successful!");
                                 currentHomePage = new HomePage(
                                     "bluesky", 
+                                    blueskyAccessToken,
+                                    mastodonAccessToken,
                                     MainPage.this::showPlatformSelector, 
                                     MainPage.this::showBlueskyLoginForm, 
                                     MainPage.this::showMastodonLoginForm
@@ -503,6 +510,8 @@ public class MainPage extends Application {
                                 statusLabel.setText("✅ Mastodon login successful!");
                                 currentHomePage = new HomePage(
                                     "mastodon", 
+                                    blueskyAccessToken,
+                                    mastodonAccessToken,
                                     MainPage.this::showPlatformSelector, 
                                     MainPage.this::showBlueskyLoginForm, 
                                     MainPage.this::showMastodonLoginForm
