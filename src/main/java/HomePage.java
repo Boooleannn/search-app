@@ -22,7 +22,7 @@ public class HomePage extends BorderPane {
                     Runnable onBlueskyLogin,
                     Runnable onMastodonLogin) {
         // === Top: Search Bar ===
-        HBox searchBar = createSearchBar(platform, onGoBack);
+        HBox searchBar = createSearchBar(platform, onGoBack, blueskyAccessToken, mastodonAccessToken);
         this.setTop(searchBar);
 
         // === Center: Tabs + Results Area ===
@@ -52,7 +52,7 @@ public class HomePage extends BorderPane {
         this.setStyle("-fx-background-color: #e6f2ff;");
     }
 
-    private HBox createSearchBar(String platform, Runnable onGoBack) {
+    private HBox createSearchBar(String platform, Runnable onGoBack, String blueskyAccessToken, String mastodonAccessToken) {
         HBox searchBar = new HBox(10);
         searchBar.setPadding(new Insets(20, 20, 10, 20));
         searchBar.setAlignment(Pos.CENTER_LEFT);
@@ -96,7 +96,20 @@ public class HomePage extends BorderPane {
 
                     VBox box = new VBox(10);
                     if (cbBluesky.isSelected()) {
-                        box.getChildren().add(new Label("Bluesky results for: " + q));
+                        if (blueskyAccessToken == null || blueskyAccessToken.isEmpty()) {
+                            box.getChildren().add(new Label("❌ Not logged into Bluesky."));
+                        } else {
+                            try {
+                                String blueskyResult = searchBlueskyAuth(q, blueskyAccessToken);
+                                TextArea blueskyArea = new TextArea(blueskyResult);
+                                blueskyArea.setEditable(false);
+                                blueskyArea.setWrapText(true);
+                                blueskyArea.setPrefHeight(100);
+                                box.getChildren().add(blueskyArea);
+                            } catch (Exception ex) {
+                                box.getChildren().add(new Label("❌ Bluesky error: " + ex.getMessage() + blueskyAccessToken));
+                            }
+                        }
                     }
                     if (cbMastodon.isSelected()) {
                         box.getChildren().add(new Label("Mastodon results for: " + q));
@@ -144,7 +157,75 @@ public class HomePage extends BorderPane {
         searchBar.getChildren().addAll(leftSearch, goBackButton, spacer, toggleSidebarBtn);
         return searchBar;
     }
+    private String searchBlueskyAuth(String query, String accessJwt) throws Exception {
+        String url = "https://bsky.social/xrpc/app.bsky.feed.searchPosts";
 
+        String jsonBody = new org.json.JSONObject()
+            .put("q", query)
+            .put("limit", 10)
+            .toString();
+
+        var request = java.net.http.HttpRequest.newBuilder()
+            .uri(java.net.URI.create(url))
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Bearer " + accessJwt)
+            .timeout(java.time.Duration.ofSeconds(10))
+            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(jsonBody))
+            .build();
+
+        var client = java.net.http.HttpClient.newHttpClient();
+        var response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Bluesky auth search failed: " + response.statusCode());
+        }
+
+        // Parse posts (same as before)
+        var json = new org.json.JSONObject(response.body());
+        var posts = json.getJSONArray("posts");
+        StringBuilder sb = new StringBuilder("🔵 (Auth) Bluesky results:\n");
+        for (int i = 0; i < Math.min(posts.length(), 3); i++) {
+            var post = posts.getJSONObject(i);
+            String text = post.optString("text", "").replaceAll("\\s+", " ");
+            sb.append("• ").append(text.length() > 80 ? text.substring(0, 80) + "…" : text).append("\n");
+        }
+        return sb.toString();
+    }
+
+    private String searchMastodonAuth(String query, String instance, String accessToken) throws Exception {
+        instance = instance.replaceAll("https?://", "").split("/")[0];
+        if (instance.startsWith("@")) instance = instance.substring(1);
+
+        String encodedQuery = java.net.URLEncoder.encode(query, "UTF-8");
+        String url = String.format(
+            "https://%s/api/v2/search?q=%s&type=statuses&limit=10&resolve=true",
+            instance, encodedQuery
+        );
+
+        var request = java.net.http.HttpRequest.newBuilder()
+            .uri(java.net.URI.create(url))
+            .header("Authorization", "Bearer " + accessToken)
+            .timeout(java.time.Duration.ofSeconds(10))
+            .GET()
+            .build();
+
+        var client = java.net.http.HttpClient.newHttpClient();
+        var response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Mastodon auth search failed: " + response.statusCode());
+        }
+
+        var json = new org.json.JSONObject(response.body());
+        var statuses = json.getJSONArray("statuses");
+        StringBuilder sb = new StringBuilder("🐘 (Auth) Mastodon results:\n");
+        for (int i = 0; i < Math.min(statuses.length(), 3); i++) {
+            var status = statuses.getJSONObject(i);
+            String content = status.optString("content", "").replaceAll("<[^>]*>", "").replaceAll("\\s+", " ");
+            sb.append("• ").append(content.length() > 80 ? content.substring(0, 80) + "…" : content).append("\n");
+        }
+        return sb.toString();
+    }
     private VBox createSidebar(Runnable onBlueskyLogin, Runnable onMastodonLogin) {
         sidebarContent = new VBox(15);
         sidebarContent.setPadding(new Insets(30, 20, 20, 0));

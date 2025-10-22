@@ -235,7 +235,7 @@ public class MainPage extends Application {
                                     BlueskyUtil.exchangeCodeForTokens(cb.code(), codeVerifier, clientId, redirectUri, new BlueskyUtil.BlueskyCallback() {
                                         @Override
                                         public void onSuccess(BlueskyUtil.TokenSet tokenSet) {
-                                            String accessToken = tokenSet.accessToken; // Extract the access token
+                                            blueskyAccessToken = tokenSet.accessToken; // Extract the access token
                                             Platform.runLater(() -> {
                                                 statusLabel.setText("✅ Login successful!");
                                                 
