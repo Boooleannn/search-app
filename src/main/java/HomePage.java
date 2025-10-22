@@ -51,7 +51,6 @@ public class HomePage extends BorderPane {
         this.setStyle("-fx-background-color: #e6f2ff;");
     }
 
-    // Removed 'onSearch' parameter
     private HBox createSearchBar(String platform, Runnable onGoBack) {
         HBox searchBar = new HBox(10);
         searchBar.setPadding(new Insets(20, 20, 10, 20));
@@ -93,7 +92,6 @@ public class HomePage extends BorderPane {
             Task<Node> task = new Task<>() {
                 @Override
                 protected Node call() throws Exception {
-                    Thread.sleep(800); // simulate network delay
 
                     VBox box = new VBox(10);
                     if (cbBluesky.isSelected()) {
