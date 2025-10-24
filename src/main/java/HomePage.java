@@ -9,6 +9,8 @@ import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.net.http.*;
+import java.net.URI;
 
 public class HomePage extends BorderPane {
     private VBox sidebarContent;
@@ -22,7 +24,7 @@ public class HomePage extends BorderPane {
                     Runnable onBlueskyLogin,
                     Runnable onMastodonLogin) {
         // === Top: Search Bar ===
-        HBox searchBar = createSearchBar(platform, onGoBack, blueskyAccessToken, mastodonAccessToken);
+     HBox searchBar = createSearchBar(platform, onGoBack, onBlueskyLogin, blueskyAccessToken, mastodonAccessToken);
         this.setTop(searchBar);
 
         // === Center: Tabs + Results Area ===
@@ -52,7 +54,7 @@ public class HomePage extends BorderPane {
         this.setStyle("-fx-background-color: #e6f2ff;");
     }
 
-    private HBox createSearchBar(String platform, Runnable onGoBack, String blueskyAccessToken, String mastodonAccessToken) {
+     private HBox createSearchBar(String platform, Runnable onGoBack, Runnable onBlueskyLogin, String blueskyAccessToken, String mastodonAccessToken) {
         HBox searchBar = new HBox(10);
         searchBar.setPadding(new Insets(20, 20, 10, 20));
         searchBar.setAlignment(Pos.CENTER_LEFT);
@@ -107,8 +109,17 @@ public class HomePage extends BorderPane {
                                 blueskyArea.setPrefHeight(100);
                                 box.getChildren().add(blueskyArea);
                             } catch (Exception ex) {
-                                box.getChildren().add(new Label("❌ Bluesky error: " + ex.getMessage() + blueskyAccessToken));
-                            }
+                                box.getChildren().add(new Label("❌ Bluesky error: " + ex.getMessage()));
+                                System.err.println("[Bluesky] search exception: " + ex.getMessage());
+                                // if scope error or unauthorized, offer to re-login
+                                String m = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase();
+                                if (m.contains("bad token scope") || m.contains("unauthorized") || m.contains("invalidtoken")) {
+                                    Button relogin = new Button("Re-login to Bluesky");
+                                    relogin.setOnAction(evt -> {
+                                        if (onBlueskyLogin != null) onBlueskyLogin.run();
+                                    });
+                                    box.getChildren().add(relogin);
+                                }                          }
                         }
                     }
                     if (cbMastodon.isSelected()) {
@@ -158,39 +169,155 @@ public class HomePage extends BorderPane {
         return searchBar;
     }
     private String searchBlueskyAuth(String query, String accessJwt) throws Exception {
-        String url = "https://bsky.social/xrpc/app.bsky.feed.searchPosts";
+        String q = java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8);
 
-        String jsonBody = new org.json.JSONObject()
-            .put("q", query)
-            .put("limit", 10)
-            .toString();
+        String[] hosts = new String[] {
+            "https://public.api.bsky.app", // primary unauthenticated AppView
+            "https://api.bsky.app"         // alternate AppView host
+        };
 
-        var request = java.net.http.HttpRequest.newBuilder()
-            .uri(java.net.URI.create(url))
-            .header("Content-Type", "application/json")
-            .header("Authorization", "Bearer " + accessJwt)
-            .timeout(java.time.Duration.ofSeconds(10))
-            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(jsonBody))
+        var client = java.net.http.HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(10))
             .build();
 
-        var client = java.net.http.HttpClient.newHttpClient();
-        var response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+        // Try public AppView (no auth)
+        for (String host : hosts) {
+            String url = host + "/xrpc/app.bsky.feed.searchPosts?q=" + q + "&limit=10";
+            var req = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(url))
+                .GET()
+                .header("User-Agent", "SearchApp/1.0")
+                .header("Accept", "application/json")
+                .timeout(java.time.Duration.ofSeconds(10))
+                .build();
 
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("Bluesky auth search failed: " + response.statusCode());
+            var resp = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+            int code = resp.statusCode();
+
+            if (code == 200) {
+                System.out.println("[Bluesky] AppView OK on " + host);
+                return prettyPrintSearch(resp.body());
+            } else if (code == 403) {
+                // try next host / fallback
+                System.err.println("[Bluesky] AppView 403 on " + host + " — trying fallback");
+            } else {
+                String shortBody = resp.body() == null ? "" :
+                    (resp.body().length() > 300 ? resp.body().substring(0, 300) + "…" : resp.body());
+                throw new RuntimeException("Bluesky search failed: " + code + " " + shortBody);
+            }
         }
 
-        // Parse posts (same as before)
-        var json = new org.json.JSONObject(response.body());
-        var posts = json.getJSONArray("posts");
-        StringBuilder sb = new StringBuilder("🔵 (Auth) Bluesky results:\n");
-        for (int i = 0; i < Math.min(posts.length(), 3); i++) {
-            var post = posts.getJSONObject(i);
-            String text = post.optString("text", "").replaceAll("\\s+", " ");
-            sb.append("• ").append(text.length() > 80 ? text.substring(0, 80) + "…" : text).append("\n");
+        // Fallback: try user's PDS (authenticated) if we have a token.
+
+        if (accessJwt != null && !accessJwt.isBlank()) {
+            String pdsHost = "https://bsky.social"; // best-effort fallback; ideally use actual user's PDS
+            String url = pdsHost.replaceAll("/+$", "") + "/xrpc/app.bsky.feed.searchPosts?q=" + q + "&limit=10";
+
+            String dpopProof = null;
+            try { dpopProof = searchapp.DPoPUtil.buildDPoP("GET", url, null); } catch (Exception ignored) {}
+
+            var reqBuilder = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(url))
+                .GET()
+                .header("Authorization", "DPoP " + accessJwt)
+                .header("DPoP", dpopProof == null ? "" : dpopProof)
+                .header("User-Agent", "SearchApp/1.0")
+                .header("Accept", "application/json")
+                .timeout(java.time.Duration.ofSeconds(10));
+
+            var req = reqBuilder.build();
+            var resp = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+
+            // handle dpop-nonce if returned (retry once)
+            if (resp.statusCode() == 401 && resp.headers().firstValue("dpop-nonce").isPresent()) {
+                String nonce = resp.headers().firstValue("dpop-nonce").get();
+                String proofWithNonce = searchapp.DPoPUtil.buildDPoP("GET", url, nonce);
+
+                // Rebuild request explicitly (newBuilder(HttpRequest) is not available)
+                req = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(url))
+                    .GET()
+                    .header("Authorization", "DPoP " + accessJwt)
+                    .header("DPoP", proofWithNonce)
+                    .header("User-Agent", "SearchApp/1.0")
+                    .header("Accept", "application/json")
+                    .timeout(java.time.Duration.ofSeconds(10))
+                    .build();
+                resp = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+            }
+
+            int code = resp.statusCode();
+            System.out.println("[Bluesky] PDS response: " + code);
+
+            if (code == 200) return prettyPrintSearch(resp.body());
+
+            String shortBody = resp.body() == null ? "" :
+                (resp.body().length() > 300 ? resp.body().substring(0, 300) + "…" : resp.body());
+            throw new RuntimeException("Bluesky (PDS) search failed: " + code + " " + shortBody);
         }
+
+        throw new RuntimeException("Bluesky search blocked by AppView and no PDS fallback available.");
+    }
+
+    // Helper to summarize posts array safely
+    private String prettyPrintSearch(String body) {
+        if (body == null || body.isBlank()) return "🔵 Bluesky results:\n• Empty response.";
+        org.json.JSONObject json;
+        try {
+            json = new org.json.JSONObject(body);
+        } catch (Exception e) {
+            // not a JSON object — try array
+            try {
+                org.json.JSONArray arr = new org.json.JSONArray(body);
+                return extractPostsFromArray(arr);
+            } catch (Exception ex) {
+                return "🔵 Bluesky results:\n• Unparseable response.";
+            }
+        }
+
+        org.json.JSONArray posts = null;
+        if (json.has("posts")) posts = json.optJSONArray("posts");
+        else if (json.has("data") && json.optJSONObject("data") != null) {
+            posts = json.optJSONObject("data").optJSONArray("posts");
+        } else if (json.has("feed")) posts = json.optJSONArray("feed");
+
+        if (posts == null) {
+            // sometimes the structure nests differently; try to find first array value
+            for (String key : json.keySet()) {
+                if (json.opt(key) instanceof org.json.JSONArray) {
+                    posts = json.optJSONArray(key);
+                    break;
+                }
+            }
+        }
+
+        if (posts == null || posts.length() == 0) return "🔵 Bluesky results:\n• No results.";
+        return extractPostsFromArray(posts);
+     }
+
+    private String extractPostsFromArray(org.json.JSONArray posts) {
+        StringBuilder sb = new StringBuilder("🔵 Bluesky results:\n");
+        for (int i = 0; i < Math.min(posts.length(), 10); i++) {
+            org.json.JSONObject item = posts.optJSONObject(i);
+            if (item == null) continue;
+            String text = "";
+            if (item.has("post") && item.opt("post") instanceof org.json.JSONObject) {
+                org.json.JSONObject p = item.optJSONObject("post");
+                text = p.optString("text", p.optJSONObject("record") == null ? "" : p.optJSONObject("record").optString("text", ""));
+            } else if (item.has("record") && item.opt("record") instanceof org.json.JSONObject) {
+                text = item.optJSONObject("record").optString("text", "");
+            } else {
+                text = item.optString("text", "");
+            }
+            text = text.replaceAll("\\s+", " ").trim();
+            if (text.isEmpty()) continue;
+            sb.append("• ").append(text.length() > 120 ? text.substring(0, 120) + "…" : text).append("\n");
+        }
+        if (sb.length() == "🔵 Bluesky results:\n".length()) sb.append("• No results.");
         return sb.toString();
     }
+
+    
 
     private String searchMastodonAuth(String query, String instance, String accessToken) throws Exception {
         instance = instance.replaceAll("https?://", "").split("/")[0];
@@ -292,4 +419,15 @@ public class HomePage extends BorderPane {
             }
         });
     }
+    public static void debugBlueskyToken(String token) throws Exception {
+    HttpClient client = HttpClient.newHttpClient();
+    HttpRequest req = HttpRequest.newBuilder()
+        .uri(URI.create("https://bsky.social/xrpc/com.atproto.server.getSession"))
+        .header("Authorization", "Bearer " + token)
+        .POST(HttpRequest.BodyPublishers.noBody()) // xrpc endpoints are POST
+        .build();
+
+    HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+    System.out.println("getSession HTTP " + resp.statusCode() + " body=" + resp.body());
+}
 }
