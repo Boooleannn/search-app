@@ -18,13 +18,14 @@ public class HomePage extends BorderPane {
     private VBox resultsArea;
 
     public HomePage(String platform,
-                    String blueskyAccessToken, 
-                    String mastodonAccessToken,  
+                    String blueskyAccessToken,
+                    String mastodonAccessToken,
+                    String mastodonInstance,
                     Runnable onGoBack,
                     Runnable onBlueskyLogin,
-                    Runnable onMastodonLogin) {
+                    Runnable onMastodonLogin){
         // === Top: Search Bar ===
-     HBox searchBar = createSearchBar(platform, onGoBack, onBlueskyLogin, blueskyAccessToken, mastodonAccessToken);
+    HBox searchBar = createSearchBar(platform, onGoBack, onBlueskyLogin, blueskyAccessToken, mastodonAccessToken, mastodonInstance);
         this.setTop(searchBar);
 
         // === Center: Tabs + Results Area ===
@@ -54,7 +55,7 @@ public class HomePage extends BorderPane {
         this.setStyle("-fx-background-color: #e6f2ff;");
     }
 
-     private HBox createSearchBar(String platform, Runnable onGoBack, Runnable onBlueskyLogin, String blueskyAccessToken, String mastodonAccessToken) {
+    private HBox createSearchBar(String platform, Runnable onGoBack, Runnable onBlueskyLogin, String blueskyAccessToken, String mastodonAccessToken, String mastodonInstance) {
         HBox searchBar = new HBox(10);
         searchBar.setPadding(new Insets(20, 20, 10, 20));
         searchBar.setAlignment(Pos.CENTER_LEFT);
@@ -123,10 +124,25 @@ public class HomePage extends BorderPane {
                         }
                     }
                     if (cbMastodon.isSelected()) {
-                        box.getChildren().add(new Label("Mastodon results for: " + q));
-                    }
-                    return box;
+                        if (mastodonAccessToken == null || mastodonAccessToken.isBlank()) {
+                            box.getChildren().add(new Label("❌ Not logged into Mastodon."));
+                        } else {
+                            try {
+                                String instanceHost = (mastodonInstance == null) ? "" : mastodonInstance;
+                                String mResult = searchMastodonAuth(q, instanceHost, mastodonAccessToken);
+                                TextArea mArea = new TextArea(mResult);
+                                mArea.setEditable(false);
+                                mArea.setWrapText(true);
+                                mArea.setPrefHeight(100);
+                                box.getChildren().add(mArea);
+                            } catch (Exception ex) {
+                                box.getChildren().add(new Label("❌ Mastodon error: " + ex.getMessage()));
+                                System.err.println("[Mastodon] search exception: " + ex.getMessage());
+                            }
+                        }
                 }
+                return box;
+            }
             };
 
             task.setOnSucceeded(event -> showSearchResults(task.getValue()));

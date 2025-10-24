@@ -243,6 +243,7 @@ public class MainPage extends Application {
                                                     "bluesky", 
                                                     blueskyAccessToken,
                                                     mastodonAccessToken,
+                                                    mastodonInstance,
                                                     MainPage.this::showPlatformSelector, 
                                                     MainPage.this::showBlueskyLoginForm, 
                                                     MainPage.this::showMastodonLoginForm
@@ -372,6 +373,7 @@ public class MainPage extends Application {
                                 "mastodon", 
                                 blueskyAccessToken,
                                 mastodonAccessToken,
+                                mastodonInstance,
                                 MainPage.this::showPlatformSelector, 
                                 MainPage.this::showBlueskyLoginForm, 
                                 MainPage.this::showMastodonLoginForm
@@ -468,6 +470,7 @@ public class MainPage extends Application {
                                     "bluesky", 
                                     blueskyAccessToken,
                                     mastodonAccessToken,
+                                    mastodonInstance,
                                     MainPage.this::showPlatformSelector, 
                                     MainPage.this::showBlueskyLoginForm, 
                                     MainPage.this::showMastodonLoginForm
@@ -512,6 +515,7 @@ public class MainPage extends Application {
                                     "mastodon", 
                                     blueskyAccessToken,
                                     mastodonAccessToken,
+                                    mastodonInstance,
                                     MainPage.this::showPlatformSelector, 
                                     MainPage.this::showBlueskyLoginForm, 
                                     MainPage.this::showMastodonLoginForm
