@@ -11,6 +11,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.net.http.*;
 import java.net.URI;
+import app.ui.PostCards;
 
 public class HomePage extends BorderPane {
     private VBox sidebarContent;
@@ -103,16 +104,19 @@ public class HomePage extends BorderPane {
                             box.getChildren().add(new Label("❌ Not logged into Bluesky."));
                         } else {
                             try {
-                                String blueskyResult = searchBlueskyAuth(q, blueskyAccessToken);
-                                TextArea blueskyArea = new TextArea(blueskyResult);
-                                blueskyArea.setEditable(false);
-                                blueskyArea.setWrapText(true);
-                                blueskyArea.setPrefHeight(100);
-                                box.getChildren().add(blueskyArea);
+                                String body = searchBlueskyRaw(q, blueskyAccessToken);
+                                java.util.List<Node> cards = PostCards.buildBlueskyCardsFromBody(body);
+                                if (cards.isEmpty()) {
+                                    box.getChildren().add(new Label("🔵 Bluesky: No results."));
+                                } else {
+                                    for (Node n : cards) {
+                                        VBox.setMargin(n, new Insets(6, 0, 6, 0));
+                                        box.getChildren().add(n);
+                                    }
+                                }
                             } catch (Exception ex) {
-                                box.getChildren().add(new Label("❌ Bluesky error: " + ex.getMessage()));
+                               box.getChildren().add(new Label("❌ Bluesky error: " + ex.getMessage()));
                                 System.err.println("[Bluesky] search exception: " + ex.getMessage());
-                                // if scope error or unauthorized, offer to re-login
                                 String m = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase();
                                 if (m.contains("bad token scope") || m.contains("unauthorized") || m.contains("invalidtoken")) {
                                     Button relogin = new Button("Re-login to Bluesky");
@@ -120,27 +124,33 @@ public class HomePage extends BorderPane {
                                         if (onBlueskyLogin != null) onBlueskyLogin.run();
                                     });
                                     box.getChildren().add(relogin);
-                                }                          }
+                                }
+                            }
                         }
                     }
+                    
                     if (cbMastodon.isSelected()) {
                         if (mastodonAccessToken == null || mastodonAccessToken.isBlank()) {
                             box.getChildren().add(new Label("❌ Not logged into Mastodon."));
                         } else {
                             try {
                                 String instanceHost = (mastodonInstance == null) ? "" : mastodonInstance;
-                                String mResult = searchMastodonAuth(q, instanceHost, mastodonAccessToken);
-                                TextArea mArea = new TextArea(mResult);
-                                mArea.setEditable(false);
-                                mArea.setWrapText(true);
-                                mArea.setPrefHeight(100);
-                                box.getChildren().add(mArea);
+                                String body = searchMastodonRaw(q, instanceHost, mastodonAccessToken);
+                                java.util.List<Node> cards = PostCards.buildMastodonCardsFromBody(body);
+                                if (cards.isEmpty()) {
+                                    box.getChildren().add(new Label("🐘 Mastodon: No results."));
+                                } else {
+                                    for (Node n : cards) {
+                                        VBox.setMargin(n, new Insets(6, 0, 6, 0));
+                                        box.getChildren().add(n);
+                                    }
+                                }
                             } catch (Exception ex) {
                                 box.getChildren().add(new Label("❌ Mastodon error: " + ex.getMessage()));
                                 System.err.println("[Mastodon] search exception: " + ex.getMessage());
                             }
                         }
-                }
+                 }
                 return box;
             }
             };
@@ -183,6 +193,105 @@ public class HomePage extends BorderPane {
 
         searchBar.getChildren().addAll(leftSearch, goBackButton, spacer, toggleSidebarBtn);
         return searchBar;
+    }
+    private String searchBlueskyRaw(String query, String accessJwt) throws Exception {
+        String q = java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8);
+        String[] hosts = new String[] {
+            "https://public.api.bsky.app",
+            "https://api.bsky.app"
+        };
+        var client = java.net.http.HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(10))
+            .build();
+
+        for (String host : hosts) {
+            String url = host + "/xrpc/app.bsky.feed.searchPosts?q=" + q + "&limit=10";
+            var req = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(url))
+                .GET()
+                .header("User-Agent", "SearchApp/1.0")
+                .header("Accept", "application/json")
+                .timeout(java.time.Duration.ofSeconds(10))
+                .build();
+            var resp = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+            int code = resp.statusCode();
+            if (code / 100 == 2) return resp.body();
+            if (code == 403) {
+                System.err.println("[Bluesky] AppView 403 on " + host + " — trying fallback");
+                continue;
+            }
+            String shortBody = resp.body() == null ? "" :
+                (resp.body().length() > 300 ? resp.body().substring(0, 300) + "…" : resp.body());
+            throw new RuntimeException("Bluesky search failed: " + code + " " + shortBody);
+        }
+
+        if (accessJwt != null && !accessJwt.isBlank()) {
+            String pdsHost = "https://bsky.social";
+            String url = pdsHost.replaceAll("/+$", "") + "/xrpc/app.bsky.feed.searchPosts?q=" + q + "&limit=10";
+            String dpopProof = null;
+            try { dpopProof = searchapp.DPoPUtil.buildDPoP("GET", url, null); } catch (Exception ignored) {}
+
+            var reqBuilder = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(url))
+                .GET()
+                .header("Authorization", "DPoP " + accessJwt)
+                .header("DPoP", dpopProof == null ? "" : dpopProof)
+                .header("User-Agent", "SearchApp/1.0")
+                .header("Accept", "application/json")
+                .timeout(java.time.Duration.ofSeconds(10));
+            var req = reqBuilder.build();
+            var resp = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() == 401 && resp.headers().firstValue("dpop-nonce").isPresent()) {
+                String nonce = resp.headers().firstValue("dpop-nonce").get();
+                String proofWithNonce = searchapp.DPoPUtil.buildDPoP("GET", url, nonce);
+                req = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(url))
+                    .GET()
+                    .header("Authorization", "DPoP " + accessJwt)
+                    .header("DPoP", proofWithNonce)
+                    .header("User-Agent", "SearchApp/1.0")
+                    .header("Accept", "application/json")
+                    .timeout(java.time.Duration.ofSeconds(10))
+                    .build();
+                resp = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+            }
+            int code = resp.statusCode();
+            if (code / 100 == 2) return resp.body();
+            String shortBody = resp.body() == null ? "" :
+                (resp.body().length() > 300 ? resp.body().substring(0, 300) + "…" : resp.body());
+            throw new RuntimeException("Bluesky (PDS) search failed: " + code + " " + shortBody);
+        }
+        throw new RuntimeException("Bluesky search blocked by AppView and no PDS fallback available.");
+    }
+
+    // Raw Mastodon search: returns HTTP body on 2xx
+    private String searchMastodonRaw(String query, String instance, String accessToken) throws Exception {
+        String inst = instance == null ? "" : instance.trim();
+        inst = inst.replaceFirst("^https?://", "");
+        inst = inst.replaceAll("^@", "");
+        if (inst.isEmpty()) throw new IllegalArgumentException("Missing Mastodon instance host");
+
+        String q = java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8);
+        String url = "https://" + inst + "/api/v2/search?type=statuses&q=" + q + "&limit=10&resolve=true";
+
+        var req = java.net.http.HttpRequest.newBuilder()
+            .uri(java.net.URI.create(url))
+            .GET()
+            .header("Authorization", "Bearer " + accessToken)
+            .header("Accept", "application/json")
+            .header("User-Agent", "GRClient/1.0 (+https://grjimenez.github.io)")
+            .timeout(java.time.Duration.ofSeconds(10))
+            .build();
+
+        var client = java.net.http.HttpClient.newHttpClient();
+        var resp = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() / 100 != 2) {
+            String shortBody = resp.body() == null ? "" :
+                (resp.body().length() > 300 ? resp.body().substring(0, 300) + "…" : resp.body());
+            System.err.println("[Mastodon] search failed HTTP " + resp.statusCode() + " body=" + shortBody);
+            throw new RuntimeException("Mastodon search failed: " + resp.statusCode() + " " + shortBody);
+        }
+        return resp.body();
     }
     private String searchBlueskyAuth(String query, String accessJwt) throws Exception {
         String q = java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8);
