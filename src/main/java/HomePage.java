@@ -42,14 +42,19 @@ public class HomePage extends BorderPane {
         resultsArea = new VBox();
         resultsArea.setPadding(new Insets(20));
         resultsArea.setFillWidth(true);
-
+        resultsArea.setAlignment(Pos.CENTER);
         
         ScrollPane resultsScroll = new ScrollPane(resultsArea);
         resultsScroll.setFitToWidth(true);
+        resultsScroll.setFitToHeight(true);
         resultsScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         resultsScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         resultsScroll.setPannable(true);
         resultsScroll.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
+
+        // Make scroll pane expand to fill available space
+        VBox.setVgrow(resultsScroll, Priority.ALWAYS);
+        HBox.setHgrow(resultsScroll, Priority.ALWAYS);
 
         VBox centerBox = new VBox(tabs, resultsScroll);
         VBox.setVgrow(resultsScroll, Priority.ALWAYS);
@@ -65,8 +70,12 @@ public class HomePage extends BorderPane {
 
     private HBox createSearchBar(String platform, Runnable onGoBack, Runnable onBlueskyLogin, String blueskyAccessToken, String mastodonAccessToken, String mastodonInstance) {
         HBox searchBar = new HBox(10);
-        searchBar.setPadding(new Insets(20, 20, 10, 20));
-        searchBar.setAlignment(Pos.CENTER_LEFT);
+        searchBar.setPadding(new Insets(20));
+        searchBar.setAlignment(Pos.CENTER);
+        searchBar.setFillHeight(true);
+        
+        // Make search bar fill width of window
+        searchBar.prefWidthProperty().bind(this.widthProperty());
 
         String iconPath = platform != null && platform.equalsIgnoreCase("mastodon") ?
             "/images/mastodon.svg.png" : "/images/Bluesky_Logo.png";
@@ -79,7 +88,8 @@ public class HomePage extends BorderPane {
 
         TextField searchField = new TextField();
         searchField.setPromptText("Search for posts, accounts, trends");
-        searchField.setPrefWidth(480);
+        // Make search field expand to fill available space
+        HBox.setHgrow(searchField, Priority.ALWAYS);
         searchField.setStyle("-fx-background-radius: 20; -fx-font-size: 16;");
 
         CheckBox cbBluesky = new CheckBox("Bluesky");
@@ -87,7 +97,43 @@ public class HomePage extends BorderPane {
         cbBluesky.setSelected(true);
         cbMastodon.setSelected(true);
 
+        // Create a HBox for buttons to keep them together
+        HBox buttonGroup = new HBox(10);
+        buttonGroup.setAlignment(Pos.CENTER_RIGHT);
+
         Button searchBtn = new Button("Search");
+        Button goBackButton = new Button("Go Back");
+        goBackButton.setStyle("-fx-background-radius: 20;");
+        goBackButton.setOnAction(e -> {
+            if (onGoBack != null) onGoBack.run();
+        });
+
+        buttonGroup.getChildren().addAll(searchBtn, goBackButton);
+
+        Button toggleSidebarBtn = new Button("☰");
+        toggleSidebarBtn.setStyle("-fx-font-size: 24; -fx-background-color: transparent; -fx-padding: 0; -fx-border-width: 0;");
+        toggleSidebarBtn.setOnAction(e -> {
+            sidebarExpanded = !sidebarExpanded;
+            if (sidebarContent != null) {
+                sidebarContent.setVisible(sidebarExpanded);
+                sidebarContent.setManaged(sidebarExpanded);
+            }
+        });
+
+        // Create VBox for checkboxes
+        VBox checkBoxGroup = new VBox(5, cbBluesky, cbMastodon);
+        checkBoxGroup.setAlignment(Pos.CENTER_LEFT);
+
+        // Main content layout
+        HBox leftContent = new HBox(10);
+        if (logo != null) leftContent.getChildren().add(logo);
+        leftContent.getChildren().addAll(searchField, checkBoxGroup, buttonGroup, toggleSidebarBtn);
+        leftContent.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(leftContent, Priority.ALWAYS);
+
+        searchBar.getChildren().add(leftContent);
+
+        // Add search button action
         searchBtn.setOnAction(e -> {
             String q = searchField.getText().trim();
             if (q.isEmpty()) {
@@ -106,6 +152,7 @@ public class HomePage extends BorderPane {
                 protected Node call() throws Exception {
 
                     VBox box = new VBox(10);
+                    box.setSpacing(15);
                     if (cbBluesky.isSelected()) {
                         if (blueskyAccessToken == null || blueskyAccessToken.isEmpty()) {
                             box.getChildren().add(new Label("❌ Not logged into Bluesky."));
@@ -116,8 +163,14 @@ public class HomePage extends BorderPane {
                                 if (cards.isEmpty()) {
                                     box.getChildren().add(new Label("🔵 Bluesky: No results."));
                                 } else {
+                                    Label blueskyHeader = new Label("🔵 Bluesky Results");
+                                    blueskyHeader.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+                                    box.getChildren().add(blueskyHeader);
+                                    
                                     for (Node n : cards) {
-                                        VBox.setMargin(n, new Insets(6, 0, 6, 0));
+                                        VBox.setMargin(n, new Insets(8));
+                                        // Style the post card
+                                        n.setStyle("-fx-background-color: white; -fx-padding: 15; -fx-background-radius: 8;");
                                         box.getChildren().add(n);
                                     }
                                 }
@@ -147,8 +200,14 @@ public class HomePage extends BorderPane {
                                 if (cards.isEmpty()) {
                                     box.getChildren().add(new Label("🐘 Mastodon: No results."));
                                 } else {
+                                    Label mastodonHeader = new Label("🐘 Mastodon Results");
+                                    mastodonHeader.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+                                    box.getChildren().add(mastodonHeader);
+                                    
                                     for (Node n : cards) {
-                                        VBox.setMargin(n, new Insets(6, 0, 6, 0));
+                                        VBox.setMargin(n, new Insets(8));
+                                        // Style the post card
+                                        n.setStyle("-fx-background-color: white; -fx-padding: 15; -fx-background-radius: 8;");
                                         box.getChildren().add(n);
                                     }
                                 }
@@ -171,34 +230,7 @@ public class HomePage extends BorderPane {
         });
 
         searchField.setOnAction(e -> searchBtn.fire());
-
-        HBox searchLeft = new HBox(8);
-        if (logo != null) searchLeft.getChildren().add(logo);
-        searchLeft.getChildren().addAll(searchField, searchBtn);
-
-        VBox leftSearch = new VBox(6, searchLeft, new HBox(8, cbBluesky, cbMastodon));
-        leftSearch.setAlignment(Pos.CENTER_LEFT);
-
-        Button goBackButton = new Button("Go Back");
-        goBackButton.setStyle("-fx-background-radius: 20;");
-        goBackButton.setOnAction(e -> {
-            if (onGoBack != null) onGoBack.run();
-        });
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        Button toggleSidebarBtn = new Button("☰");
-        toggleSidebarBtn.setStyle("-fx-font-size: 24; -fx-background-color: transparent; -fx-padding: 0; -fx-border-width: 0;");
-        toggleSidebarBtn.setOnAction(e -> {
-            sidebarExpanded = !sidebarExpanded;
-            if (sidebarContent != null) {
-                sidebarContent.setVisible(sidebarExpanded);
-                sidebarContent.setManaged(sidebarExpanded);
-            }
-        });
-
-        searchBar.getChildren().addAll(leftSearch, goBackButton, spacer, toggleSidebarBtn);
+        
         return searchBar;
     }
     private String searchBlueskyRaw(String query, String accessJwt) throws Exception {
@@ -547,7 +579,43 @@ public class HomePage extends BorderPane {
         Platform.runLater(() -> {
             resultsArea.getChildren().clear();
             if (results != null) {
-                resultsArea.getChildren().add(results);
+                // Make results expand to fill available width
+                if (results instanceof Region) {
+                    ((Region) results).setMaxWidth(Double.MAX_VALUE);
+                    results.setStyle("-fx-alignment: center; -fx-font-size: 14px;");
+                }
+                
+                // If the results are text-based, ensure they're displayed properly
+                if (results instanceof Label) {
+                    Label label = (Label) results;
+                    label.setWrapText(true);
+                    label.setTextAlignment(javafx.scene.text.TextAlignment.LEFT);
+                    label.setMaxWidth(Double.MAX_VALUE);
+                }
+                
+                if (results instanceof VBox) {
+                    VBox box = (VBox) results;
+                    // Style each child node to show full text
+                    for (Node child : box.getChildren()) {
+                        if (child instanceof Label) {
+                            Label label = (Label) child;
+                            label.setWrapText(true);
+                            label.setStyle("-fx-padding: 10; -fx-background-color: white; -fx-background-radius: 5;");
+                            label.setMaxWidth(Double.MAX_VALUE);
+                        }
+                    }
+                }
+                
+                // Center the results in the available space
+                ScrollPane scrollPane = new ScrollPane(results);
+                scrollPane.setFitToWidth(true);
+                scrollPane.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
+                
+                StackPane centeringPane = new StackPane(scrollPane);
+                centeringPane.setAlignment(Pos.TOP_CENTER);
+                VBox.setVgrow(centeringPane, Priority.ALWAYS);
+                
+                resultsArea.getChildren().add(centeringPane);
             }
         });
     }
