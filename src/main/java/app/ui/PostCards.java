@@ -8,7 +8,6 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.shape.Circle;
-import javafx.scene.control.OverrunStyle;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -144,8 +143,7 @@ public class PostCards {
 
         VBox who = new VBox(2);
         Label nameLbl = new Label((displayName == null || displayName.isBlank()) ? handle : displayName);
-        nameLbl.setStyle("-fx-font-weight: 700; -fx-font-size: 13px; -fx-text-fill: #000000;"); /
-
+        nameLbl.setStyle("-fx-font-weight: 700; -fx-font-size: 13px;");
         Label metaLbl = new Label(
                 (handle == null ? "" : handle) +
                 (createdAtIso == null ? "" : " · " + formatRelativeTime(createdAtIso))
@@ -163,10 +161,7 @@ public class PostCards {
 
         Label textLbl = new Label(text == null ? "" : text);
         textLbl.setWrapText(true);
-        textLbl.setStyle("-fx-font-size: 13px; -fx-text-fill: #000000;");  
-        textLbl.setMaxWidth(680);
-        textLbl.setPadding(new Insets(4, 0, 4, 0));
-        textLbl.setTextOverrun(OverrunStyle.WORD_ELLIPSIS);
+        textLbl.setStyle("-fx-font-size: 13px;");
 
         ImageView media = null;
         if (imageUrl != null && !imageUrl.isBlank()) {
@@ -222,3 +217,4 @@ public class PostCards {
         }
     }
 }
+
