@@ -7,8 +7,6 @@ import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.net.http.*;
 import java.net.URI;
 import app.ui.PostCards;
@@ -45,7 +43,16 @@ public class HomePage extends BorderPane {
         resultsArea.setPadding(new Insets(20));
         resultsArea.setFillWidth(true);
 
-        VBox centerBox = new VBox(tabs, resultsArea);
+        
+        ScrollPane resultsScroll = new ScrollPane(resultsArea);
+        resultsScroll.setFitToWidth(true);
+        resultsScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        resultsScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        resultsScroll.setPannable(true);
+        resultsScroll.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
+
+        VBox centerBox = new VBox(tabs, resultsScroll);
+        VBox.setVgrow(resultsScroll, Priority.ALWAYS);
         centerBox.setStyle("-fx-background-color: #f0f8ff;");
         this.setCenter(centerBox);
 
