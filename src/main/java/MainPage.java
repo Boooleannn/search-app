@@ -40,13 +40,35 @@ public class MainPage extends Application {
     private String mastodonDisplayName;
     private String blueskyAccessToken;
     private HomePage currentHomePage;
-
+    
+    private void loadSFProFonts() {
+        try {
+            // Load different weights of SF Pro Display
+            Font.loadFont(getClass().getResourceAsStream("/fonts/SF-Pro-Display-Regular.otf"), 14);
+            Font.loadFont(getClass().getResourceAsStream("/fonts/SF-Pro-Display-Medium.otf"), 14);
+            Font.loadFont(getClass().getResourceAsStream("/fonts/SF-Pro-Display-Bold.otf"), 14);
+            Font.loadFont(getClass().getResourceAsStream("/fonts/SF-Pro-Display-Semibold.otf"), 14);
+            Font.loadFont(getClass().getResourceAsStream("/fonts/SF-Pro-Display-Light.otf"), 14);
+            Font.loadFont(getClass().getResourceAsStream("/fonts/SF-Pro-Display-Heavy.otf"), 14);
+        } catch (Exception e) {
+            System.err.println("Error loading SF Pro Display fonts: " + e.getMessage());
+        }
+    }
+    
     @Override
     public void start(Stage stage) {
+        loadSFProFonts();
+
+        try {
+        Image appIcon = new Image(getClass().getResourceAsStream("/images/app-icon.png"));
+        stage.getIcons().add(appIcon);
+        } catch (Exception e) {
+            System.err.println("Failed to load application icon: " + e.getMessage());
+        }
         stage.setTitle("Social Search: Bluesky + Mastodon");
 
         statusLabel = new Label("Select a platform to log in.");
-        statusLabel.setStyle("-fx-text-fill: #007acc; -fx-font-weight: bold;");
+        statusLabel.setStyle("-fx-text-fill: #007acc; -fx-font-weight: bold; -fx-font-family: 'SF Pro Display';");
 
         loginFormContainer = new VBox();
         loginFormContainer.setAlignment(Pos.CENTER);
@@ -73,7 +95,7 @@ public class MainPage extends Application {
         loginFormContainer.getChildren().clear();
 
         Label titleLabel = new Label("Choose Platform to Log In");
-        titleLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #005fa3;");
+        titleLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #005fa3; -fx-font-family: 'SF Pro Display Bold';");
         titleLabel.setAlignment(Pos.CENTER);
 
         // Load Images
@@ -119,7 +141,7 @@ public class MainPage extends Application {
         loginFormContainer.getChildren().clear();
 
         Label header = new Label("Log in to Bluesky");
-        header.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #005fa3;");
+        header.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #005fa3; -fx-font-family: 'SF Pro Display Bold';");
 
         Button openBrowserButton = new Button("Open Bluesky Login in Browser");
         styleButton(openBrowserButton);
@@ -304,7 +326,11 @@ public class MainPage extends Application {
         loginFormContainer.getChildren().clear();
 
         Label header = new Label("Sign in with Mastodon");
-        header.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #005fa3;");
+        header.setStyle(
+            "-fx-font-size: 20px; " +
+            "-fx-text-fill: #005fa3; " +
+            "-fx-font-family: 'SF Pro Display Bold';"
+        );
 
         FloatingLabelField handleFieldWrapper = new FloatingLabelField("Enter your Mastodon instance (e.g. mastodon.social or fosstodon.org)");
         TextField handleField = handleFieldWrapper.getTextField();
@@ -424,6 +450,7 @@ public class MainPage extends Application {
             -fx-background-color: #ffffffff;
             -fx-text-fill: #005fa3;
             -fx-font-weight: bold;
+            -fx-font-family: 'SF Pro Display Light';
             -fx-padding: 10 20;
             -fx-border-radius: 5;
             -fx-background-radius: 5;
@@ -438,11 +465,12 @@ public class MainPage extends Application {
             -fx-text-fill: #005fa3;
             -fx-font-size: 18px;
             -fx-font-weight: bold;
+            -fx-font-family: 'SF Pro Display';
             -fx-padding: 15 40;
             -fx-border-radius: 10;
             -fx-background-radius: 10;
             -fx-alignment: center-left;
-        """);
+""");
         btn.setOnMouseEntered(e -> btn.setStyle(btn.getStyle() + " -fx-background-color: #c7e7fdff;"));
         btn.setOnMouseExited(e -> btn.setStyle(btn.getStyle().replace("-fx-background-color: #c7e7fdff;", "-fx-background-color: #ffffff;")));
     }
@@ -541,7 +569,7 @@ public class MainPage extends Application {
         root.setCenter(loginFormContainer);
     }
 
-    // MAKE MASTODON LOGIN FIELD LIKE GOOGLE
+    // MAKE MASTODON LOGIN FIELD LIKE GOOGLE    
     private static class FloatingLabelField extends StackPane {
         private final Label floatingLabel;
         private final TextField textField;
@@ -552,7 +580,7 @@ public class MainPage extends Application {
 
             textField = new TextField();
             textField.setPromptText("");
-            textField.setFont(Font.font("SF Pro Text", 14));
+            textField.setFont(Font.font("SF Pro Display Light", 14));
             textField.setPrefHeight(40);
             textField.setStyle(
                 "-fx-background-color: #f0f8ff;" +
@@ -564,7 +592,7 @@ public class MainPage extends Application {
 
             floatingLabel = new Label(labelText);
             floatingLabel.setTextFill(Color.web("#80868b")); 
-            floatingLabel.setFont(Font.font("SF Pro Text", 14));
+            floatingLabel.setFont(Font.font("SF Pro Display Light", 14));
             floatingLabel.setTranslateY(12); // Position in middle of field initially
             floatingLabel.setTranslateX(10);
             floatingLabel.setPadding(new Insets(0, 5, 0, 5));
