@@ -1,6 +1,50 @@
-{"mastodon.social": {
-  "scope": "read",
-  "client_secret": "Z9nFHSdC9GYUFgw9sQT9hwVtbTHSe0w0ByzyxGA8dZs",
-  "redirect_uri": "http://127.0.0.1:8765/callback",
-  "client_id": "YQlmWzgNu9-TEad2-2agebj6GvU-7CU8T61oLNmNS7g"
-}}
+{
+  "fosstodon.org": {
+    "scope": "read",
+    "client_secret": "JJep-qLRjWJk7NiLd-czdJ8_Vuce1F0He36heNlocZg",
+    "redirect_uri": "http://127.0.0.1:8765/callback",
+    "client_id": "A6pCalaqwTfw0yR3n_7CyZqElIPqRnzP8_qp34zJx1c"
+  },
+  "journa.host": {
+    "scope": "read",
+    "client_secret": "74-FyhbG6C2PJVxCiWauFSDIx9VMgj2pvJGTj3MZ75U",
+    "redirect_uri": "http://127.0.0.1:8765/callback",
+    "client_id": "xpxHrTmm0897q1ZfBcG-GR_b4dH5iOGyMcaZF1D9dbU"
+  },
+  "disabled.social": {
+    "scope": "read",
+    "client_secret": "D5ww2sMliQfYg32q1-4ONloMpWtLzHhudsV3KsHCxNE",
+    "redirect_uri": "http://127.0.0.1:8765/callback",
+    "client_id": "hYMgecYt4Nylw4FVlPvLzGJVfBxtsjSUrc1FnuGCFl0"
+  },
+  "universeodon.com": {
+    "scope": "read",
+    "client_secret": "eFagvmfy7v6MFJ1kaMQEFt5Jpxw_ZMHWBhS8Aj46afQ",
+    "redirect_uri": "http://127.0.0.1:8765/callback",
+    "client_id": "Eq3cVCTV4jLz1hE8VZk6yTTnUPCysQmPZ1TvtjQwq8A"
+  },
+  "mastodon.online": {
+    "scope": "read",
+    "client_secret": "E7ma3lZfWatWfGRTU4XHJynNCyq9JyRph9j10y6sSIM",
+    "redirect_uri": "http://127.0.0.1:8765/callback",
+    "client_id": "bdYGnCLaXPUSiFlz0coNrMoc-uS53EtDk5w4bkvW78Q"
+  },
+  "writing.exchange": {
+    "scope": "read",
+    "client_secret": "8gB2f0Isyixq7qiMRqq3DkhpNifjbIZMqDv0kHWp5Xg",
+    "redirect_uri": "http://127.0.0.1:8765/callback",
+    "client_id": "bW1SILKV-4frRFSLW9MQbrNqNWPczjP9vvoPDC4fl28"
+  },
+  "mastodon.social": {
+    "scope": "read",
+    "client_secret": "Z9nFHSdC9GYUFgw9sQT9hwVtbTHSe0w0ByzyxGA8dZs",
+    "redirect_uri": "http://127.0.0.1:8765/callback",
+    "client_id": "YQlmWzgNu9-TEad2-2agebj6GvU-7CU8T61oLNmNS7g"
+  },
+  "techhub.social": {
+    "scope": "read",
+    "client_secret": "8_NRjeyv07cSL3Qq-NFq0nMxfxfu8Vje-iik1fi7Kyo",
+    "redirect_uri": "http://127.0.0.1:8765/callback",
+    "client_id": "p8U-0KPzss8Plxic2WF8q5tv4OjBBcjCxWDbyuvHuxk"
+  }
+}

@@ -3,24 +3,30 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.stage.Stage;
+import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
+import javafx.scene.text.Font;  // Add this import
+import javafx.scene.Node;
+import javafx.util.Duration;
+import javafx.animation.ScaleTransition;
+import javafx.animation.TranslateTransition;
+import javafx.application.Platform;
+
 import org.json.JSONObject;
+
+import searchapp.BlueskyUtil;
+import searchapp.DPoPUtil;
+import searchapp.LocalCallbackServer;
+import searchapp.PkceUtil;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import javafx.application.Platform;
-import javafx.concurrent.Task;
-import searchapp.PkceUtil;
-import searchapp.DPoPUtil;
-import searchapp.LocalCallbackServer;
-import searchapp.BlueskyUtil;
-import javafx.scene.Node;
 
 public class MainPage extends Application {
 
@@ -300,9 +306,8 @@ public class MainPage extends Application {
         Label header = new Label("Sign in with Mastodon");
         header.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #005fa3;");
 
-        TextField handleField = new TextField();
-        handleField.setPromptText("e.g. @user@mastodon.social or mastodon.social");
-        handleField.setPrefWidth(400);
+        FloatingLabelField handleFieldWrapper = new FloatingLabelField("Enter your Mastodon instance (e.g. mastodon.social or fosstodon.org)");
+        TextField handleField = handleFieldWrapper.getTextField();
 
         Button signInBtn = new Button("Sign in with Mastodon");
         styleButton(signInBtn);
@@ -311,7 +316,7 @@ public class MainPage extends Application {
         styleButton(backButton);
         backButton.setOnAction(e -> showPlatformSelector());
 
-        VBox v = new VBox(12, header, handleField, signInBtn, backButton);
+        VBox v = new VBox(12, header, handleFieldWrapper, signInBtn, backButton);
         v.setAlignment(Pos.CENTER);
 
         signInBtn.setOnAction(e -> {
@@ -534,6 +539,109 @@ public class MainPage extends Application {
 
     public void showLoginPage() {
         root.setCenter(loginFormContainer);
+    }
+
+    // MAKE MASTODON LOGIN FIELD LIKE GOOGLE
+    private static class FloatingLabelField extends StackPane {
+        private final Label floatingLabel;
+        private final TextField textField;
+        private boolean isFloating = false;
+
+        public FloatingLabelField(String labelText) {
+            setPrefWidth(300);
+
+            textField = new TextField();
+            textField.setPromptText("");
+            textField.setFont(Font.font("SF Pro Text", 14));
+            textField.setPrefHeight(40);
+            textField.setStyle(
+                "-fx-background-color: #f0f8ff;" +
+                "-fx-border-color: #9aa0a6;" +
+                "-fx-border-radius: 6;" +
+                "-fx-background-radius: 6;" +
+                "-fx-padding: 15 8 8 8;"
+            );
+
+            floatingLabel = new Label(labelText);
+            floatingLabel.setTextFill(Color.web("#80868b")); 
+            floatingLabel.setFont(Font.font("SF Pro Text", 14));
+            floatingLabel.setTranslateY(12); // Position in middle of field initially
+            floatingLabel.setTranslateX(10);
+            floatingLabel.setPadding(new Insets(0, 5, 0, 5));
+            floatingLabel.setStyle("-fx-background-color: #f0f8ff;"); // Match parent background
+            floatingLabel.setMouseTransparent(true);
+
+            getChildren().addAll(textField, floatingLabel);
+
+            // Animate label on focus or typing
+            textField.focusedProperty().addListener((obs, oldVal, newVal) -> {
+                if (newVal) floatLabelUp();
+                else if (textField.getText().isEmpty()) floatLabelDown();
+            });
+
+            textField.textProperty().addListener((obs, oldVal, newVal) -> {
+                if (!textField.getText().isEmpty()) floatLabelUp();
+            });
+
+            textField.setOnKeyPressed(event -> {
+                if (event.getCode() == javafx.scene.input.KeyCode.ENTER) {
+                    // Find the parent VBox that contains the sign in button
+                    Node parent = getParent();
+                    while (parent != null && !(parent instanceof VBox)) {
+                        parent = parent.getParent();
+                    }
+                    
+                    if (parent instanceof VBox) {
+                        // Find the sign in button in the VBox children
+                        VBox vbox = (VBox) parent;
+                        vbox.getChildren().stream()
+                            .filter(node -> node instanceof Button)
+                            .map(node -> (Button) node)
+                            .filter(button -> button.getText().contains("Sign in"))
+                            .findFirst()
+                            .ifPresent(Button::fire);
+                    }
+                }
+            });
+        }
+
+        private void floatLabelUp() {
+            if (isFloating) return;
+            isFloating = true;
+
+            TranslateTransition moveUp = new TranslateTransition(Duration.millis(150), floatingLabel);
+            moveUp.setToY(-22); // Move to top border position
+
+            ScaleTransition shrink = new ScaleTransition(Duration.millis(150), floatingLabel);
+            shrink.setToX(0.85);
+            shrink.setToY(0.85);
+
+            floatingLabel.setTextFill(Color.web("#005fa3"));
+
+            moveUp.play();
+            shrink.play();
+        }
+
+        private void floatLabelDown() {
+            if (!isFloating) return;
+            isFloating = false;
+
+            TranslateTransition moveDown = new TranslateTransition(Duration.millis(150), floatingLabel);
+            moveDown.setToY(0); // Move back to middle position
+
+            ScaleTransition grow = new ScaleTransition(Duration.millis(150), floatingLabel);
+            grow.setToX(1);
+            grow.setToY(1);
+
+            floatingLabel.setTextFill(Color.web("#80868b"));
+
+            moveDown.play();
+            grow.play();
+        }
+
+        public TextField getTextField() {
+            return textField;
+        }
     }
 
     public static void main(String[] args) {
