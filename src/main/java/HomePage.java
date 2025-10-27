@@ -164,7 +164,7 @@ public class HomePage extends BorderPane {
                                     box.getChildren().add(new Label("🔵 Bluesky: No results."));
                                 } else {
                                     Label blueskyHeader = new Label("🔵 Bluesky Results");
-                                    blueskyHeader.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+                                    blueskyHeader.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #1565c0;");  // Blue color
                                     box.getChildren().add(blueskyHeader);
                                     
                                     for (Node n : cards) {
@@ -201,7 +201,7 @@ public class HomePage extends BorderPane {
                                     box.getChildren().add(new Label("🐘 Mastodon: No results."));
                                 } else {
                                     Label mastodonHeader = new Label("🐘 Mastodon Results");
-                                    mastodonHeader.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+                                    mastodonHeader.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #4527a0;");  // Purple color
                                     box.getChildren().add(mastodonHeader);
                                     
                                     for (Node n : cards) {
@@ -582,25 +582,49 @@ public class HomePage extends BorderPane {
                 // Make results expand to fill available width
                 if (results instanceof Region) {
                     ((Region) results).setMaxWidth(Double.MAX_VALUE);
-                    results.setStyle("-fx-alignment: center; -fx-font-size: 14px;");
+                    results.setStyle("-fx-alignment: center; -fx-font-size: 14px; -fx-text-fill: #000000;");
                 }
                 
                 // If the results are text-based, ensure they're displayed properly
                 if (results instanceof Label) {
                     Label label = (Label) results;
                     label.setWrapText(true);
-                    label.setTextAlignment(javafx.scene.text.TextAlignment.LEFT);
+                    label.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);  // Center text
+                    label.setAlignment(Pos.CENTER);  // Center the label itself
                     label.setMaxWidth(Double.MAX_VALUE);
+                    label.setStyle("-fx-text-fill: #000000; -fx-font-size: 14px; -fx-padding: 10;");
                 }
                 
                 if (results instanceof VBox) {
                     VBox box = (VBox) results;
+                    box.setAlignment(Pos.CENTER);  // Center the VBox contents
+                    
                     // Style each child node to show full text
                     for (Node child : box.getChildren()) {
                         if (child instanceof Label) {
                             Label label = (Label) child;
                             label.setWrapText(true);
-                            label.setStyle("-fx-padding: 10; -fx-background-color: white; -fx-background-radius: 5;");
+                            label.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);  // Center text
+                            label.setAlignment(Pos.CENTER);  // Center the label itself
+                            
+                            // Different styling for different message types
+                            String text = label.getText();
+                            if (text.contains("⏳")) {  // Loading message
+                                label.setStyle("-fx-padding: 10; -fx-background-color: #e8f5e9; -fx-background-radius: 5; -fx-text-fill: #000000;");
+                            } else if (text.contains("❌")) {  // Error messages
+                                label.setStyle("-fx-padding: 10; -fx-background-color: #ffebee; -fx-text-fill: #c62828; -fx-background-radius: 5;");
+                            } else if (text.contains("🔵") && text.contains("No results")) {        // Bluesky no results
+                                label.setStyle("-fx-padding: 10; -fx-background-color: #e3f2fd; -fx-text-fill: #1565c0; -fx-background-radius: 5;");
+                            } else if (text.contains("🔵") && text.contains("Bluesky Results")) {  // Bluesky results
+                                label.setStyle("-fx-padding: 10; -fx-background-color: #e3f2fd; -fx-text-fill: #1565c0; -fx-background-radius: 5;");
+                            } else if (text.contains("🐘") && text.contains("No results")) {        // Mastodon no results
+                                label.setStyle("-fx-padding: 10; -fx-background-color: #ede7f6; -fx-text-fill: #4527a0; -fx-background-radius: 5;");
+                            } else if (text.contains("🐘") && text.contains("Mastodon Results")) {  // Mastodon  results
+                                label.setStyle("-fx-padding: 10; -fx-background-color: #ede7f6; -fx-text-fill: #4527a0; -fx-background-radius: 5;");
+                            } else {  // Other messages
+                                label.setStyle("-fx-padding: 10; -fx-background-color: white; -fx-background-radius: 5; -fx-text-fill: #0034ddff;");
+                            }
+                            
                             label.setMaxWidth(Double.MAX_VALUE);
                         }
                     }
