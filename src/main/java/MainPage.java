@@ -8,7 +8,7 @@ import javafx.scene.image.ImageView;
 import javafx.stage.Stage;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
-import javafx.scene.text.Font;  // Add this import
+import javafx.scene.text.Font;  
 import javafx.scene.Node;
 import javafx.util.Duration;
 import javafx.animation.ScaleTransition;
@@ -58,7 +58,7 @@ public class MainPage extends Application {
     @Override
     public void start(Stage stage) {
         loadSFProFonts();
-
+        
         try {
         Image appIcon = new Image(getClass().getResourceAsStream("/images/app-icon.png"));
         stage.getIcons().add(appIcon);
