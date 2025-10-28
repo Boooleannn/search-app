@@ -3,6 +3,7 @@ package app.ui;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -32,7 +33,7 @@ public class PostCards {
 
             JSONObject author = p.optJSONObject("author");
             String displayName = author == null ? "" : author.optString("displayName", "");
-            String handle = author == null ? "" : "@" + author.optString("handle", "");
+            String handle = author == null ? "" : author.optString("handle", "");
             String avatar = author == null ? null : author.optString("avatar", null);
 
             JSONObject record = p.optJSONObject("record");
@@ -42,6 +43,10 @@ public class PostCards {
 
             Integer likeCount = p.has("likeCount") ? p.optInt("likeCount") : null;
             Integer repostCount = p.has("repostCount") ? p.optInt("repostCount") : null;
+
+            // Extract post URI to build URL
+            String uri = p.optString("uri", null);
+            String postUrl = buildBlueskyUrl(handle, uri);
 
             String imageUrl = null;
             JSONObject embed = p.optJSONObject("embed");
@@ -64,8 +69,8 @@ public class PostCards {
             }
 
             nodes.add(buildPostCard(
-                    "bluesky", displayName, handle, avatar, createdAt,
-                    text, imageUrl, likeCount, repostCount
+                    "bluesky", displayName, "@" + handle, avatar, createdAt,
+                    text, imageUrl, likeCount, repostCount, postUrl
             ));
         }
         return nodes;
@@ -91,6 +96,9 @@ public class PostCards {
             Integer likeCount = st.has("favourites_count") ? st.optInt("favourites_count") : null;
             Integer repostCount = st.has("reblogs_count") ? st.optInt("reblogs_count") : null;
 
+            // Get the post URL directly from Mastodon API
+            String postUrl = st.optString("url", null);
+
             String imageUrl = null;
             JSONArray media = st.optJSONArray("media_attachments");
             if (media != null && media.length() > 0) {
@@ -105,7 +113,7 @@ public class PostCards {
 
             nodes.add(buildPostCard(
                     "mastodon", displayName, handle, avatar, createdAt,
-                    text, imageUrl, likeCount, repostCount
+                    text, imageUrl, likeCount, repostCount, postUrl
             ));
         }
         return nodes;
@@ -121,7 +129,8 @@ public class PostCards {
             String text,
             String imageUrl,
             Integer likeCount,
-            Integer repostCount
+            Integer repostCount,
+            String postUrl
     ) {
         VBox card = new VBox(6);
         card.setPadding(new Insets(10));
@@ -187,7 +196,37 @@ public class PostCards {
         likes.setStyle("-fx-text-fill:#475467; -fx-font-size: 12px;");
         reposts.setStyle("-fx-text-fill:#475467; -fx-font-size: 12px;");
 
-        footer.getChildren().addAll(likes, reposts);
+        // Add "View Original" button
+        Region footerSpacer = new Region();
+        HBox.setHgrow(footerSpacer, Priority.ALWAYS);
+        
+        Button viewOriginalBtn = new Button("🔗 View Original");
+        viewOriginalBtn.setStyle(
+            "-fx-background-color: " + (platform.equals("bluesky") ? "#0085ff" : "#563acc") + ";" +
+            "-fx-text-fill: white;" +
+            "-fx-font-size: 11px;" +
+            "-fx-padding: 4 12;" +
+            "-fx-background-radius: 999;" +
+            "-fx-cursor: hand;"
+        );
+        
+        // Add hover effect
+        viewOriginalBtn.setOnMouseEntered(e -> 
+            viewOriginalBtn.setStyle(viewOriginalBtn.getStyle() + "-fx-opacity: 0.8;")
+        );
+        viewOriginalBtn.setOnMouseExited(e -> 
+            viewOriginalBtn.setStyle(viewOriginalBtn.getStyle().replace("-fx-opacity: 0.8;", ""))
+        );
+        
+        // Open URL in browser when clicked
+        if (postUrl != null && !postUrl.isBlank()) {
+            viewOriginalBtn.setOnAction(e -> openUrlInBrowser(postUrl));
+        } else {
+            viewOriginalBtn.setDisable(true);
+            viewOriginalBtn.setText("URL not available");
+        }
+
+        footer.getChildren().addAll(likes, reposts, footerSpacer, viewOriginalBtn);
 
         card.getChildren().addAll(header, textLbl);
         if (media != null) card.getChildren().add(media);
@@ -219,6 +258,43 @@ public class PostCards {
             long yr  = day / 365; return yr + "y";
         } catch (Exception e) {
             return "";
+        }
+    }
+
+    private static String buildBlueskyUrl(String handle, String uri) {
+        if (uri == null || uri.isBlank() || handle == null || handle.isBlank()) {
+            return null;
+        }
+        
+        try {
+            // URI format: at://did:plc:xxxxx/app.bsky.feed.post/xxxxx
+            // URL format: https://bsky.app/profile/handle.bsky.social/post/xxxxx
+            String[] parts = uri.split("/");
+            if (parts.length >= 3) {
+                String postId = parts[parts.length - 1];
+                return "https://bsky.app/profile/" + handle + "/post/" + postId;
+            }
+        } catch (Exception e) {
+            System.err.println("Error building Bluesky URL: " + e.getMessage());
+        }
+        
+        return null;
+    }
+
+    private static void openUrlInBrowser(String url) {
+        if (url == null || url.isBlank()) return;
+        
+        try {
+            // Try using JavaFX HostServices (needs to be passed from Application)
+            // For now, use Java Desktop API
+            if (java.awt.Desktop.isDesktopSupported()) {
+                java.awt.Desktop desktop = java.awt.Desktop.getDesktop();
+                if (desktop.isSupported(java.awt.Desktop.Action.BROWSE)) {
+                    desktop.browse(java.net.URI.create(url));
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error opening URL in browser: " + e.getMessage());
         }
     }
 }
