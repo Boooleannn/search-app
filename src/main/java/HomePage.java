@@ -24,7 +24,7 @@ public class HomePage extends BorderPane {
                     Runnable onBlueskyLogin,
                     Runnable onMastodonLogin){
         // === Top: Search Bar ===
-    HBox searchBar = createSearchBar(platform, onGoBack, onBlueskyLogin, blueskyAccessToken, mastodonAccessToken, mastodonInstance);
+        HBox searchBar = createSearchBar(platform, onGoBack, onBlueskyLogin, blueskyAccessToken, mastodonAccessToken, mastodonInstance);
         this.setTop(searchBar);
 
         // === Center: Tabs + Results Area ===
@@ -77,14 +77,43 @@ public class HomePage extends BorderPane {
         // Make search bar fill width of window
         searchBar.prefWidthProperty().bind(this.widthProperty());
 
-        String iconPath = platform != null && platform.equalsIgnoreCase("mastodon") ?
-            "/images/mastodon.svg.png" : "/images/Bluesky_Logo.png";
-        ImageView logo = null;
-        try {
-            logo = new ImageView(new Image(getClass().getResourceAsStream(iconPath)));
-            logo.setFitHeight(32);
-            logo.setFitWidth(32);
-        } catch (Exception ignored) {}
+        // Determine which logos to show based on logged-in status
+        boolean blueskyLoggedIn = blueskyAccessToken != null && !blueskyAccessToken.isBlank();
+        boolean mastodonLoggedIn = mastodonAccessToken != null && !mastodonAccessToken.isBlank();
+
+        HBox logoContainer = new HBox(8);
+        logoContainer.setAlignment(Pos.CENTER_LEFT);
+
+        // Add Bluesky logo if logged in
+        if (blueskyLoggedIn) {
+            try {
+                ImageView blueskyLogo = new ImageView(new Image(getClass().getResourceAsStream("/images/Bluesky_Logo.png")));
+                blueskyLogo.setFitHeight(32);
+                blueskyLogo.setFitWidth(32);
+                logoContainer.getChildren().add(blueskyLogo);
+            } catch (Exception e) {
+                System.err.println("Could not load Bluesky logo: " + e.getMessage());
+            }
+        }
+
+        // Add Mastodon logo if logged in
+        if (mastodonLoggedIn) {
+            try {
+                ImageView mastodonLogo = new ImageView(new Image(getClass().getResourceAsStream("/images/mastodon.svg.png")));
+                mastodonLogo.setFitHeight(32);
+                mastodonLogo.setFitWidth(32);
+                logoContainer.getChildren().add(mastodonLogo);
+            } catch (Exception e) {
+                System.err.println("Could not load Mastodon logo: " + e.getMessage());
+            }
+        }
+
+        // If no accounts logged in, show a default placeholder
+        if (!blueskyLoggedIn && !mastodonLoggedIn) {
+            Label placeholder = new Label("No accounts");
+            placeholder.setStyle("-fx-font-size: 14; -fx-text-fill: #666;");
+            logoContainer.getChildren().add(placeholder);
+        }
 
         TextField searchField = new TextField();
         searchField.setPromptText("Search for posts, accounts, trends");
@@ -94,8 +123,12 @@ public class HomePage extends BorderPane {
 
         CheckBox cbBluesky = new CheckBox("Bluesky");
         CheckBox cbMastodon = new CheckBox("Mastodon");
-        cbBluesky.setSelected(true);
-        cbMastodon.setSelected(true);
+        
+        // Set checkboxes based on login status and select by default if logged in
+        cbBluesky.setSelected(blueskyLoggedIn);
+        cbBluesky.setDisable(!blueskyLoggedIn);
+        cbMastodon.setSelected(mastodonLoggedIn);
+        cbMastodon.setDisable(!mastodonLoggedIn);
 
         // Create a HBox for buttons to keep them together
         HBox buttonGroup = new HBox(10);
@@ -126,8 +159,7 @@ public class HomePage extends BorderPane {
 
         // Main content layout
         HBox leftContent = new HBox(10);
-        if (logo != null) leftContent.getChildren().add(logo);
-        leftContent.getChildren().addAll(searchField, checkBoxGroup, buttonGroup, toggleSidebarBtn);
+        leftContent.getChildren().addAll(logoContainer, searchField, checkBoxGroup, buttonGroup, toggleSidebarBtn);
         leftContent.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(leftContent, Priority.ALWAYS);
 
@@ -256,7 +288,7 @@ public class HomePage extends BorderPane {
             int code = resp.statusCode();
             if (code / 100 == 2) return resp.body();
             if (code == 403) {
-                System.err.println("[Bluesky] AppView 403 on " + host + " — trying fallback");
+                System.err.println("[Bluesky] AppView 403 on " + host + " – trying fallback");
                 continue;
             }
             String shortBody = resp.body() == null ? "" :
@@ -363,7 +395,7 @@ public class HomePage extends BorderPane {
                 return prettyPrintSearch(resp.body());
             } else if (code == 403) {
                 // try next host / fallback
-                System.err.println("[Bluesky] AppView 403 on " + host + " — trying fallback");
+                System.err.println("[Bluesky] AppView 403 on " + host + " – trying fallback");
             } else {
                 String shortBody = resp.body() == null ? "" :
                     (resp.body().length() > 300 ? resp.body().substring(0, 300) + "…" : resp.body());
@@ -430,7 +462,7 @@ public class HomePage extends BorderPane {
         try {
             json = new org.json.JSONObject(body);
         } catch (Exception e) {
-            // not a JSON object — try array
+            // not a JSON object – try array
             try {
                 org.json.JSONArray arr = new org.json.JSONArray(body);
                 return extractPostsFromArray(arr);
@@ -512,7 +544,7 @@ public class HomePage extends BorderPane {
         StringBuilder sb = new StringBuilder("🐘 (Auth) Mastodon results:\n");
         for (int i = 0; i < Math.min(statuses.length(), 3); i++) {
             var status = statuses.getJSONObject(i);
-            String content = status.optString("content", "").replaceAll("<[^>]*>", "").replaceAll("\\s+", " ");
+            String content = status.optString("content", "").replaceAll("<[^>]+>", "").replaceAll("\\s+", " ");
             sb.append("• ").append(content.length() > 80 ? content.substring(0, 80) + "…" : content).append("\n");
         }
         return sb.toString();
