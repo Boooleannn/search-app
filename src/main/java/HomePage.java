@@ -188,75 +188,73 @@ public class HomePage extends BorderPane {
             Task<Node> task = new Task<>() {
                 @Override
                 protected Node call() throws Exception {
-
                     VBox box = new VBox(10);
-                    box.setSpacing(15);
+                    box.setSpacing(12);
+
+                    java.util.List<Node> blueskyCards = new java.util.ArrayList<>();
+                    java.util.List<Node> mastodonCards = new java.util.ArrayList<>();
+                    java.util.List<Node> merged = new java.util.ArrayList<>();
+
+                    // collect Bluesky cards
                     if (cbBluesky.isSelected()) {
-                        if (blueskyAccessToken == null || blueskyAccessToken.isEmpty()) {
-                            box.getChildren().add(new Label("❌ Not logged into Bluesky."));
+                        if (blueskyAccessToken == null || blueskyAccessToken.isBlank()) {
+                            blueskyCards.add(new Label("❌ Not logged into Bluesky."));
                         } else {
                             try {
                                 String body = searchBlueskyRaw(q, blueskyAccessToken);
-                                java.util.List<Node> cards = PostCards.buildBlueskyCardsFromBody(body);
-                                if (cards.isEmpty()) {
-                                    box.getChildren().add(new Label("🔵 Bluesky: No results."));
-                                } else {
-                                    Label blueskyHeader = new Label("🔵 Bluesky Results");
-                                    blueskyHeader.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #1565c0;");  // Blue color
-                                    box.getChildren().add(blueskyHeader);
-                                    
-                                    for (Node n : cards) {
-                                        VBox.setMargin(n, new Insets(8));
-                                        // Style the post card
-                                        n.setStyle("-fx-background-color: white; -fx-padding: 15; -fx-background-radius: 8;");
-                                        box.getChildren().add(n);
-                                    }
-                                }
+                                blueskyCards.addAll(PostCards.buildBlueskyCardsFromBody(body));
                             } catch (Exception ex) {
-                               box.getChildren().add(new Label("❌ Bluesky error: " + ex.getMessage()));
+                                Label err = new Label("❌ Bluesky error: " + ex.getMessage());
+                                blueskyCards.add(err);
                                 System.err.println("[Bluesky] search exception: " + ex.getMessage());
-                                String m = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase();
-                                if (m.contains("bad token scope") || m.contains("unauthorized") || m.contains("invalidtoken")) {
-                                    Button relogin = new Button("Re-login to Bluesky");
-                                    relogin.setOnAction(evt -> {
-                                        if (onBlueskyLogin != null) onBlueskyLogin.run();
-                                    });
-                                    box.getChildren().add(relogin);
-                                }
                             }
                         }
                     }
-                    
+
+                    // collect Mastodon cards
                     if (cbMastodon.isSelected()) {
                         if (mastodonAccessToken == null || mastodonAccessToken.isBlank()) {
-                            box.getChildren().add(new Label("❌ Not logged into Mastodon."));
+                            mastodonCards.add(new Label("❌ Not logged into Mastodon."));
                         } else {
                             try {
                                 String instanceHost = (mastodonInstance == null) ? "" : mastodonInstance;
                                 String body = searchMastodonRaw(q, instanceHost, mastodonAccessToken);
-                                java.util.List<Node> cards = PostCards.buildMastodonCardsFromBody(body);
-                                if (cards.isEmpty()) {
-                                    box.getChildren().add(new Label("🐘 Mastodon: No results."));
-                                } else {
-                                    Label mastodonHeader = new Label("🐘 Mastodon Results");
-                                    mastodonHeader.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #4527a0;");  // Purple color
-                                    box.getChildren().add(mastodonHeader);
-                                    
-                                    for (Node n : cards) {
-                                        VBox.setMargin(n, new Insets(8));
-                                        // Style the post card
-                                        n.setStyle("-fx-background-color: white; -fx-padding: 15; -fx-background-radius: 8;");
-                                        box.getChildren().add(n);
-                                    }
-                                }
+                                mastodonCards.addAll(PostCards.buildMastodonCardsFromBody(body));
                             } catch (Exception ex) {
-                                box.getChildren().add(new Label("❌ Mastodon error: " + ex.getMessage()));
+                                Label err = new Label("❌ Mastodon error: " + ex.getMessage());
+                                mastodonCards.add(err);
                                 System.err.println("[Mastodon] search exception: " + ex.getMessage());
                             }
                         }
-                 }
-                return box;
-            }
+                    }
+
+                    // Interleave the two lists (round-robin)
+                    int bi = 0, mi = 0;
+                    while (bi < blueskyCards.size() || mi < mastodonCards.size()) {
+                        if (bi < blueskyCards.size()) {
+                            merged.add(blueskyCards.get(bi++));
+                        }
+                        if (mi < mastodonCards.size()) {
+                            merged.add(mastodonCards.get(mi++));
+                        }
+                    }
+
+                    // If merged empty, show appropriate message
+                    if (merged.isEmpty()) {
+                        String msg = "No results.";
+                        if (cbBluesky.isSelected() && !cbMastodon.isSelected()) msg = "🔵 Bluesky: No results.";
+                        if (cbMastodon.isSelected() && !cbBluesky.isSelected()) msg = "🐘 Mastodon: No results.";
+                        box.getChildren().add(new Label(msg));
+                    } else {
+                        // Add merged cards to box with consistent styling
+                        for (Node n : merged) {
+                            VBox.setMargin(n, new Insets(8));
+                            n.setStyle("-fx-background-color: white; -fx-padding: 12; -fx-background-radius: 8;");
+                            box.getChildren().add(n);
+                        }
+                    }
+                    return box;
+                }
             };
 
             task.setOnSucceeded(event -> showSearchResults(task.getValue()));
