@@ -10,6 +10,10 @@ import javafx.scene.layout.*;
 import java.net.http.*;
 import java.net.URI;
 import app.ui.PostCards;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.time.Instant;
+import javafx.scene.Parent;
 
 public class HomePage extends BorderPane {
     private VBox sidebarContent;
@@ -163,9 +167,17 @@ public class HomePage extends BorderPane {
         VBox checkBoxGroup = new VBox(5, cbBluesky, cbMastodon);
         checkBoxGroup.setAlignment(Pos.CENTER_LEFT);
 
+        // Sort UI: choice box for Mixed / Latest / Most liked
+        ComboBox<String> sortBox = new ComboBox<>();
+        sortBox.getItems().addAll("Mixed", "Latest", "Most liked");
+        sortBox.setValue("Mixed");
+        Label sortLabel = new Label("Sort:");
+        HBox sortBoxWrap = new HBox(6, sortLabel, sortBox);
+        sortBoxWrap.setAlignment(Pos.CENTER_LEFT);
+
         // Main content layout
         HBox leftContent = new HBox(10);
-        leftContent.getChildren().addAll(logoContainer, searchField, checkBoxGroup, buttonGroup, toggleSidebarBtn);
+        leftContent.getChildren().addAll(logoContainer, searchField, checkBoxGroup, sortBoxWrap, buttonGroup, toggleSidebarBtn);
         leftContent.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(leftContent, Priority.ALWAYS);
 
@@ -258,6 +270,11 @@ public class HomePage extends BorderPane {
             };
 
             task.setOnSucceeded(event -> showSearchResults(task.getValue()));
+            task.setOnSucceeded(event -> {
+                showSearchResults(task.getValue());
+                // apply selected sort after results are displayed
+                Platform.runLater(() -> applySort(sortBox.getValue()));
+            });
             task.setOnFailed(event -> 
                 showSearchResults(new Label("❌ Search failed: " + event.getSource().getException().getMessage()))
             );
@@ -568,4 +585,94 @@ public class HomePage extends BorderPane {
     HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
     System.out.println("getSession HTTP " + resp.statusCode() + " body=" + resp.body());
 }
-}
+    // --- helpers for extracting text and sorting ---
+    private static void collectText(Node node, StringBuilder sb) {
+        if (node == null) return;
+        if (node instanceof Labeled) {
+            String t = ((Labeled) node).getText();
+            if (t != null && !t.isBlank()) {
+                if (sb.length() > 0) sb.append(" ");
+                sb.append(t);
+            }
+        } else if (node instanceof javafx.scene.text.Text) {
+            String t = ((javafx.scene.text.Text) node).getText();
+            if (t != null && !t.isBlank()) {
+                if (sb.length() > 0) sb.append(" ");
+                sb.append(t);
+            }
+        } else if (node instanceof Parent) {
+            for (Node child : ((Parent) node).getChildrenUnmodifiable()) {
+                collectText(child, sb);
+            }
+        }
+    }
+
+    private static String nodeText(Node node) {
+        StringBuilder sb = new StringBuilder();
+        collectText(node, sb);
+        return sb.toString().trim();
+    }
+
+    // Apply client-side sorting to currently displayed results
+    private void applySort(String mode) {
+        Platform.runLater(() -> {
+            if (mode == null || mode.equals("Mixed")) return; // no-op for mixed
+
+            if (resultsArea.getChildren().isEmpty()) return;
+            Node first = resultsArea.getChildren().get(0);
+            if (!(first instanceof StackPane)) return;
+            StackPane sp = (StackPane) first;
+            if (sp.getChildren().isEmpty()) return;
+            Node scrollNode = sp.getChildren().get(0);
+            if (!(scrollNode instanceof ScrollPane)) return;
+            ScrollPane spane = (ScrollPane) scrollNode;
+            Node content = spane.getContent();
+            if (!(content instanceof VBox)) return;
+            VBox resultsVBox = (VBox) content;
+
+            java.util.List<Node> children = new java.util.ArrayList<>(resultsVBox.getChildren());
+
+            if (mode.equals("Latest")) {
+                // try to find ISO timestamps in node text and sort descending
+                Pattern iso = Pattern.compile("(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(?:Z|[+-]\\d{2}:?\\d{2})?");
+                java.util.Map<Node, Long> tsMap = new java.util.HashMap<>();
+                for (Node n : children) {
+                    String text = nodeText(n);
+                    Matcher m = iso.matcher(text);
+                    long t = 0;
+                    if (m.find()) {
+                        try {
+                            Instant it = Instant.parse(m.group(1) + "Z");
+                            t = it.toEpochMilli();
+                        } catch (Exception ignored) {}
+                    }
+                    tsMap.put(n, t);
+                }
+                children.sort((a, b) -> Long.compare(tsMap.getOrDefault(b, 0L), tsMap.getOrDefault(a, 0L)));
+            } else if (mode.equals("Most liked")) {
+                // heuristic: find numeric likes in node text using common patterns
+                Pattern likesPat = Pattern.compile("(?:\\b|\\D)(?:likes|like|faves|favourites|reposts|reblogs|replies|★|❤️|💙|👍)[:\\s]*([0-9,]+)", Pattern.CASE_INSENSITIVE);
+                Pattern emojiNum = Pattern.compile("(?:👍|💙|❤️)\\s*([0-9,]+)");
+                java.util.Map<Node, Integer> likesMap = new java.util.HashMap<>();
+                for (Node n : children) {
+                    String text = nodeText(n);
+                    int val = 0;
+                    Matcher m = likesPat.matcher(text);
+                    if (m.find()) {
+                        String num = m.group(1).replaceAll(",", "");
+                        try { val = Integer.parseInt(num); } catch (Exception ignored) {}
+                    } else {
+                        Matcher me = emojiNum.matcher(text);
+                        if (me.find()) {
+                            String num = me.group(1).replaceAll(",", "");
+                            try { val = Integer.parseInt(num); } catch (Exception ignored) {}
+                        }
+                    }
+                    likesMap.put(n, val);
+                }
+                children.sort((a, b) -> Integer.compare(likesMap.getOrDefault(b, 0), likesMap.getOrDefault(a, 0)));
+            }
+
+            resultsVBox.getChildren().setAll(children);
+        });
+    }}
