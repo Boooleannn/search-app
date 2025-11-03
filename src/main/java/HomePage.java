@@ -10,10 +10,6 @@ import javafx.scene.layout.*;
 import java.net.http.*;
 import java.net.URI;
 import app.ui.PostCards;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.time.Instant;
-import javafx.scene.Parent;
 
 public class HomePage extends BorderPane {
     private VBox sidebarContent;
@@ -167,10 +163,10 @@ public class HomePage extends BorderPane {
         VBox checkBoxGroup = new VBox(5, cbBluesky, cbMastodon);
         checkBoxGroup.setAlignment(Pos.CENTER_LEFT);
 
-        // Sort UI: choice box for Mixed / Latest / Most liked
+        // Sort UI: choice box for \ Latest / Most relevant
         ComboBox<String> sortBox = new ComboBox<>();
-        sortBox.getItems().addAll("Mixed", "Latest", "Most liked");
-        sortBox.setValue("Mixed");
+        sortBox.getItems().addAll("Latest", "Top");
+        sortBox.setValue("Latest");
         Label sortLabel = new Label("Sort:");
         HBox sortBoxWrap = new HBox(6, sortLabel, sortBox);
         sortBoxWrap.setAlignment(Pos.CENTER_LEFT);
@@ -197,9 +193,16 @@ public class HomePage extends BorderPane {
 
             showSearchResults(new Label("⏳ Searching..."));
 
+            // determine sort param to send to server (Bluesky supports sort=top|latest)
+            final String sortParamFinal;
+            String sortSel = sortBox.getValue();
+            if ("Latest".equalsIgnoreCase(sortSel)) sortParamFinal = "latest";
+            else if ("Top".equalsIgnoreCase(sortSel) || "Top".equalsIgnoreCase(sortSel)) sortParamFinal = "top";
+            else sortParamFinal = null;
+
             Task<Node> task = new Task<>() {
-                @Override
-                protected Node call() throws Exception {
+                 @Override
+                 protected Node call() throws Exception {
                     VBox box = new VBox(10);
                     box.setSpacing(12);
 
@@ -213,7 +216,7 @@ public class HomePage extends BorderPane {
                             blueskyCards.add(new Label("❌ Not logged into Bluesky."));
                         } else {
                             try {
-                                String body = searchBlueskyRaw(q, blueskyAccessToken);
+                                String body = searchBlueskyRaw(q, blueskyAccessToken, sortParamFinal);
                                 blueskyCards.addAll(PostCards.buildBlueskyCardsFromBody(body));
                             } catch (Exception ex) {
                                 Label err = new Label("❌ Bluesky error: " + ex.getMessage());
@@ -270,11 +273,6 @@ public class HomePage extends BorderPane {
             };
 
             task.setOnSucceeded(event -> showSearchResults(task.getValue()));
-            task.setOnSucceeded(event -> {
-                showSearchResults(task.getValue());
-                // apply selected sort after results are displayed
-                Platform.runLater(() -> applySort(sortBox.getValue()));
-            });
             task.setOnFailed(event -> 
                 showSearchResults(new Label("❌ Search failed: " + event.getSource().getException().getMessage()))
             );
@@ -286,7 +284,7 @@ public class HomePage extends BorderPane {
         
         return searchBar;
     }
-    private String searchBlueskyRaw(String query, String accessJwt) throws Exception {
+    private String searchBlueskyRaw(String query, String accessJwt, String sort) throws Exception {
         String q = java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8);
         String[] hosts = new String[] {
             "https://public.api.bsky.app",
@@ -297,7 +295,7 @@ public class HomePage extends BorderPane {
             .build();
 
         for (String host : hosts) {
-            String url = host + "/xrpc/app.bsky.feed.searchPosts?q=" + q + "&limit=50";
+            String url = host + "/xrpc/app.bsky.feed.searchPosts?q=" + q + "&limit=50" + (sort != null ? "&sort=" + java.net.URLEncoder.encode(sort, java.nio.charset.StandardCharsets.UTF_8) : "");
             var req = java.net.http.HttpRequest.newBuilder()
                 .uri(java.net.URI.create(url))
                 .GET()
@@ -319,7 +317,7 @@ public class HomePage extends BorderPane {
 
         if (accessJwt != null && !accessJwt.isBlank()) {
             String pdsHost = "https://bsky.social";
-            String url = pdsHost.replaceAll("/+$", "") + "/xrpc/app.bsky.feed.searchPosts?q=" + q + "&limit=50";
+            String url = pdsHost.replaceAll("/+$", "") + "/xrpc/app.bsky.feed.searchPosts?q=" + q + "&limit=50" + (sort != null ? "&sort=" + java.net.URLEncoder.encode(sort, java.nio.charset.StandardCharsets.UTF_8) : "");
             String dpopProof = null;
             try { dpopProof = searchapp.DPoPUtil.buildDPoP("GET", url, null); } catch (Exception ignored) {}
 
@@ -385,6 +383,7 @@ public class HomePage extends BorderPane {
         }
         return resp.body();
     }
+
 
     // Helper to summarize posts array safely
     private String prettyPrintSearch(String body) {
@@ -547,7 +546,7 @@ public class HomePage extends BorderPane {
                             } else if (text.contains("🔵") && text.contains("No results")) {        // Bluesky no results
                                 label.setStyle("-fx-padding: 10; -fx-background-color: #e3f2fd; -fx-text-fill: #1565c0; -fx-background-radius: 5;");
                             } else if (text.contains("🔵") && text.contains("Bluesky Results")) {  // Bluesky results
-                                label.setStyle("-fx-padding:    ; -fx-background-color: #e3f2fd; -fx-text-fill: #1565c0; -fx-background-radius: 5;");
+                                label.setStyle("-fx-padding: 10; -fx-background-color: #e3f2fd; -fx-text-fill: #1565c0; -fx-background-radius: 5;");
                             } else if (text.contains("🐘") && text.contains("No results")) {        // Mastodon no results
                                 label.setStyle("-fx-padding: 10; -fx-background-color: #ede7f6; -fx-text-fill: #4527a0; -fx-background-radius: 5;");
                             } else if (text.contains("🐘") && text.contains("Mastodon Results")) {  // Mastodon  results
@@ -585,94 +584,4 @@ public class HomePage extends BorderPane {
     HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
     System.out.println("getSession HTTP " + resp.statusCode() + " body=" + resp.body());
 }
-    // --- helpers for extracting text and sorting ---
-    private static void collectText(Node node, StringBuilder sb) {
-        if (node == null) return;
-        if (node instanceof Labeled) {
-            String t = ((Labeled) node).getText();
-            if (t != null && !t.isBlank()) {
-                if (sb.length() > 0) sb.append(" ");
-                sb.append(t);
-            }
-        } else if (node instanceof javafx.scene.text.Text) {
-            String t = ((javafx.scene.text.Text) node).getText();
-            if (t != null && !t.isBlank()) {
-                if (sb.length() > 0) sb.append(" ");
-                sb.append(t);
-            }
-        } else if (node instanceof Parent) {
-            for (Node child : ((Parent) node).getChildrenUnmodifiable()) {
-                collectText(child, sb);
-            }
-        }
-    }
-
-    private static String nodeText(Node node) {
-        StringBuilder sb = new StringBuilder();
-        collectText(node, sb);
-        return sb.toString().trim();
-    }
-
-    // Apply client-side sorting to currently displayed results
-    private void applySort(String mode) {
-        Platform.runLater(() -> {
-            if (mode == null || mode.equals("Mixed")) return; // no-op for mixed
-
-            if (resultsArea.getChildren().isEmpty()) return;
-            Node first = resultsArea.getChildren().get(0);
-            if (!(first instanceof StackPane)) return;
-            StackPane sp = (StackPane) first;
-            if (sp.getChildren().isEmpty()) return;
-            Node scrollNode = sp.getChildren().get(0);
-            if (!(scrollNode instanceof ScrollPane)) return;
-            ScrollPane spane = (ScrollPane) scrollNode;
-            Node content = spane.getContent();
-            if (!(content instanceof VBox)) return;
-            VBox resultsVBox = (VBox) content;
-
-            java.util.List<Node> children = new java.util.ArrayList<>(resultsVBox.getChildren());
-
-            if (mode.equals("Latest")) {
-                // try to find ISO timestamps in node text and sort descending
-                Pattern iso = Pattern.compile("(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(?:Z|[+-]\\d{2}:?\\d{2})?");
-                java.util.Map<Node, Long> tsMap = new java.util.HashMap<>();
-                for (Node n : children) {
-                    String text = nodeText(n);
-                    Matcher m = iso.matcher(text);
-                    long t = 0;
-                    if (m.find()) {
-                        try {
-                            Instant it = Instant.parse(m.group(1) + "Z");
-                            t = it.toEpochMilli();
-                        } catch (Exception ignored) {}
-                    }
-                    tsMap.put(n, t);
-                }
-                children.sort((a, b) -> Long.compare(tsMap.getOrDefault(b, 0L), tsMap.getOrDefault(a, 0L)));
-            } else if (mode.equals("Most liked")) {
-                // heuristic: find numeric likes in node text using common patterns
-                Pattern likesPat = Pattern.compile("(?:\\b|\\D)(?:likes|like|faves|favourites|reposts|reblogs|replies|★|❤️|💙|👍)[:\\s]*([0-9,]+)", Pattern.CASE_INSENSITIVE);
-                Pattern emojiNum = Pattern.compile("(?:👍|💙|❤️)\\s*([0-9,]+)");
-                java.util.Map<Node, Integer> likesMap = new java.util.HashMap<>();
-                for (Node n : children) {
-                    String text = nodeText(n);
-                    int val = 0;
-                    Matcher m = likesPat.matcher(text);
-                    if (m.find()) {
-                        String num = m.group(1).replaceAll(",", "");
-                        try { val = Integer.parseInt(num); } catch (Exception ignored) {}
-                    } else {
-                        Matcher me = emojiNum.matcher(text);
-                        if (me.find()) {
-                            String num = me.group(1).replaceAll(",", "");
-                            try { val = Integer.parseInt(num); } catch (Exception ignored) {}
-                        }
-                    }
-                    likesMap.put(n, val);
-                }
-                children.sort((a, b) -> Integer.compare(likesMap.getOrDefault(b, 0), likesMap.getOrDefault(a, 0)));
-            }
-
-            resultsVBox.getChildren().setAll(children);
-        });
-    }}
+}
