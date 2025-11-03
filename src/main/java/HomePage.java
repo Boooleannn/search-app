@@ -280,7 +280,7 @@ public class HomePage extends BorderPane {
             .build();
 
         for (String host : hosts) {
-            String url = host + "/xrpc/app.bsky.feed.searchPosts?q=" + q + "&limit=10";
+            String url = host + "/xrpc/app.bsky.feed.searchPosts?q=" + q + "&limit=50";
             var req = java.net.http.HttpRequest.newBuilder()
                 .uri(java.net.URI.create(url))
                 .GET()
@@ -302,7 +302,7 @@ public class HomePage extends BorderPane {
 
         if (accessJwt != null && !accessJwt.isBlank()) {
             String pdsHost = "https://bsky.social";
-            String url = pdsHost.replaceAll("/+$", "") + "/xrpc/app.bsky.feed.searchPosts?q=" + q + "&limit=10";
+            String url = pdsHost.replaceAll("/+$", "") + "/xrpc/app.bsky.feed.searchPosts?q=" + q + "&limit=50";
             String dpopProof = null;
             try { dpopProof = searchapp.DPoPUtil.buildDPoP("GET", url, null); } catch (Exception ignored) {}
 
@@ -347,7 +347,7 @@ public class HomePage extends BorderPane {
         if (inst.isEmpty()) throw new IllegalArgumentException("Missing Mastodon instance host");
 
         String q = java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8);
-        String url = "https://" + inst + "/api/v2/search?type=statuses&q=" + q + "&limit=10&resolve=true";
+        String url = "https://" + inst + "/api/v2/search?type=statuses&q=" + q + "&limit=50&resolve=true";
 
         var req = java.net.http.HttpRequest.newBuilder()
             .uri(java.net.URI.create(url))
@@ -367,96 +367,6 @@ public class HomePage extends BorderPane {
             throw new RuntimeException("Mastodon search failed: " + resp.statusCode() + " " + shortBody);
         }
         return resp.body();
-    }
-    private String searchBlueskyAuth(String query, String accessJwt) throws Exception {
-        String q = java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8);
-
-        String[] hosts = new String[] {
-            "https://public.api.bsky.app", // primary unauthenticated AppView
-            "https://api.bsky.app"         // alternate AppView host
-        };
-
-        var client = java.net.http.HttpClient.newBuilder()
-            .connectTimeout(java.time.Duration.ofSeconds(10))
-            .build();
-
-        // Try public AppView (no auth)
-        for (String host : hosts) {
-            String url = host + "/xrpc/app.bsky.feed.searchPosts?q=" + q + "&limit=10";
-            var req = java.net.http.HttpRequest.newBuilder()
-                .uri(java.net.URI.create(url))
-                .GET()
-                .header("User-Agent", "SearchApp/1.0")
-                .header("Accept", "application/json")
-                .timeout(java.time.Duration.ofSeconds(10))
-                .build();
-
-            var resp = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
-            int code = resp.statusCode();
-
-            if (code == 200) {
-                System.out.println("[Bluesky] AppView OK on " + host);
-                return prettyPrintSearch(resp.body());
-            } else if (code == 403) {
-                // try next host / fallback
-                System.err.println("[Bluesky] AppView 403 on " + host + " – trying fallback");
-            } else {
-                String shortBody = resp.body() == null ? "" :
-                    (resp.body().length() > 300 ? resp.body().substring(0, 300) + "…" : resp.body());
-                throw new RuntimeException("Bluesky search failed: " + code + " " + shortBody);
-            }
-        }
-
-        // Fallback: try user's PDS (authenticated) if we have a token.
-
-        if (accessJwt != null && !accessJwt.isBlank()) {
-            String pdsHost = "https://bsky.social"; // best-effort fallback; ideally use actual user's PDS
-            String url = pdsHost.replaceAll("/+$", "") + "/xrpc/app.bsky.feed.searchPosts?q=" + q + "&limit=10";
-
-            String dpopProof = null;
-            try { dpopProof = searchapp.DPoPUtil.buildDPoP("GET", url, null); } catch (Exception ignored) {}
-
-            var reqBuilder = java.net.http.HttpRequest.newBuilder()
-                .uri(java.net.URI.create(url))
-                .GET()
-                .header("Authorization", "DPoP " + accessJwt)
-                .header("DPoP", dpopProof == null ? "" : dpopProof)
-                .header("User-Agent", "SearchApp/1.0")
-                .header("Accept", "application/json")
-                .timeout(java.time.Duration.ofSeconds(10));
-
-            var req = reqBuilder.build();
-            var resp = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
-
-            // handle dpop-nonce if returned (retry once)
-            if (resp.statusCode() == 401 && resp.headers().firstValue("dpop-nonce").isPresent()) {
-                String nonce = resp.headers().firstValue("dpop-nonce").get();
-                String proofWithNonce = searchapp.DPoPUtil.buildDPoP("GET", url, nonce);
-
-                // Rebuild request explicitly (newBuilder(HttpRequest) is not available)
-                req = java.net.http.HttpRequest.newBuilder()
-                    .uri(java.net.URI.create(url))
-                    .GET()
-                    .header("Authorization", "DPoP " + accessJwt)
-                    .header("DPoP", proofWithNonce)
-                    .header("User-Agent", "SearchApp/1.0")
-                    .header("Accept", "application/json")
-                    .timeout(java.time.Duration.ofSeconds(10))
-                    .build();
-                resp = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
-            }
-
-            int code = resp.statusCode();
-            System.out.println("[Bluesky] PDS response: " + code);
-
-            if (code == 200) return prettyPrintSearch(resp.body());
-
-            String shortBody = resp.body() == null ? "" :
-                (resp.body().length() > 300 ? resp.body().substring(0, 300) + "…" : resp.body());
-            throw new RuntimeException("Bluesky (PDS) search failed: " + code + " " + shortBody);
-        }
-
-        throw new RuntimeException("Bluesky search blocked by AppView and no PDS fallback available.");
     }
 
     // Helper to summarize posts array safely
@@ -518,41 +428,6 @@ public class HomePage extends BorderPane {
     }
 
     
-
-    private String searchMastodonAuth(String query, String instance, String accessToken) throws Exception {
-        instance = instance.replaceAll("https?://", "").split("/")[0];
-        if (instance.startsWith("@")) instance = instance.substring(1);
-
-        String encodedQuery = java.net.URLEncoder.encode(query, "UTF-8");
-        String url = String.format(
-            "https://%s/api/v2/search?q=%s&type=statuses&limit=10&resolve=true",
-            instance, encodedQuery
-        );
-
-        var request = java.net.http.HttpRequest.newBuilder()
-            .uri(java.net.URI.create(url))
-            .header("Authorization", "Bearer " + accessToken)
-            .timeout(java.time.Duration.ofSeconds(10))
-            .GET()
-            .build();
-
-        var client = java.net.http.HttpClient.newHttpClient();
-        var response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("Mastodon auth search failed: " + response.statusCode());
-        }
-
-        var json = new org.json.JSONObject(response.body());
-        var statuses = json.getJSONArray("statuses");
-        StringBuilder sb = new StringBuilder("🐘 (Auth) Mastodon results:\n");
-        for (int i = 0; i < Math.min(statuses.length(), 3); i++) {
-            var status = statuses.getJSONObject(i);
-            String content = status.optString("content", "").replaceAll("<[^>]+>", "").replaceAll("\\s+", " ");
-            sb.append("• ").append(content.length() > 80 ? content.substring(0, 80) + "…" : content).append("\n");
-        }
-        return sb.toString();
-    }
     private VBox createSidebar(Runnable onBlueskyLogin, Runnable onMastodonLogin) {
         sidebarContent = new VBox(15);
         sidebarContent.setPadding(new Insets(30, 20, 20, 0));
@@ -590,14 +465,9 @@ public class HomePage extends BorderPane {
             mastodonHandleLbl.setStyle("-fx-font-size: 13px; -fx-text-fill: #333;");
             mastodonRow.getChildren().addAll(mastodonButton, mastodonHandleLbl);
 
-            Label trendingLabel = new Label("Trending");
-            trendingLabel.setStyle("-fx-font-size: 24; -fx-font-weight: bold;");
-            HBox trendingBox = new HBox(10, new Label("📈"), trendingLabel);
 
-            Button uvleButton = new Button("UVLE");
-            uvleButton.setStyle("-fx-background-radius: 20;");
 
-            sidebarContent.getChildren().addAll(mastodonRow, blueskyRow, trendingBox, uvleButton);
+            sidebarContent.getChildren().addAll(mastodonRow, blueskyRow);
         } catch (Exception ex) {
             sidebarContent.getChildren().add(new Label("⚠️ Sidebar error"));
         }
@@ -660,7 +530,7 @@ public class HomePage extends BorderPane {
                             } else if (text.contains("🔵") && text.contains("No results")) {        // Bluesky no results
                                 label.setStyle("-fx-padding: 10; -fx-background-color: #e3f2fd; -fx-text-fill: #1565c0; -fx-background-radius: 5;");
                             } else if (text.contains("🔵") && text.contains("Bluesky Results")) {  // Bluesky results
-                                label.setStyle("-fx-padding: 10; -fx-background-color: #e3f2fd; -fx-text-fill: #1565c0; -fx-background-radius: 5;");
+                                label.setStyle("-fx-padding:    ; -fx-background-color: #e3f2fd; -fx-text-fill: #1565c0; -fx-background-radius: 5;");
                             } else if (text.contains("🐘") && text.contains("No results")) {        // Mastodon no results
                                 label.setStyle("-fx-padding: 10; -fx-background-color: #ede7f6; -fx-text-fill: #4527a0; -fx-background-radius: 5;");
                             } else if (text.contains("🐘") && text.contains("Mastodon Results")) {  // Mastodon  results
