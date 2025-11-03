@@ -39,7 +39,120 @@ public class MainPage extends Application {
     private String mastodonAcct;
     private String mastodonDisplayName;
     private String blueskyAccessToken;
+    private String blueskyAcct = "";
     private HomePage currentHomePage;
+
+    static String nz(String s, String fallback) {
+        return (s == null || s.isBlank()) ? fallback : s;
+    }
+    // remove .bsky.social suffix from handle
+    static String stripBskySuffix(String h) {
+        if (h == null) return "";
+        String suf = ".bsky.social";
+        return h.endsWith(suf) ? h.substring(0, h.length() - suf.length()) : h;
+    }
+
+    // Try to extract DID from JWT-like token (safe if not JWT)
+    static String didFromJwtIfAny(String token) {
+        try {
+            if (token == null || token.isBlank()) return "";
+            String[] parts = token.split("\\.");
+            if (parts.length != 3) return "";
+            String payload = new String(
+                java.util.Base64.getUrlDecoder().decode(parts[1]),
+                java.nio.charset.StandardCharsets.UTF_8
+            );
+            org.json.JSONObject claims = new org.json.JSONObject(payload);
+            return claims.optString("sub", "");
+        } catch (Exception e) {
+            System.out.println("[BLSKY][WARN] didFromJwtIfAny failed: " + e);
+            return "";
+        }
+    }
+
+    // Public: app.bsky.actor.getProfile -> handle or ""
+    static java.util.concurrent.CompletableFuture<String> getProfileHandle(String actor) {
+        try {
+            String url = "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor="
+                       + java.net.URLEncoder.encode(actor, java.nio.charset.StandardCharsets.UTF_8);
+            var req = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(url))
+                .header("Accept", "application/json")
+                .GET().build();
+            return java.net.http.HttpClient.newHttpClient()
+                .sendAsync(req, java.net.http.HttpResponse.BodyHandlers.ofString())
+                .thenApply(resp -> {
+                    System.out.println("[BLSKY] getProfile(" + actor + ") HTTP " + resp.statusCode());
+                    if (resp.statusCode() == 200) {
+                        var obj = new org.json.JSONObject(resp.body());
+                        return obj.optString("handle", "");
+                    }
+                    System.out.println("[BLSKY][ERR] getProfile body=" + resp.body());
+                    return "";
+                });
+        } catch (Exception e) {
+            var f = new java.util.concurrent.CompletableFuture<String>();
+            f.completeExceptionally(e);
+            return f;
+        }
+    }
+
+    // Public: app.bsky.actor.searchActors -> first handle or ""
+    static java.util.concurrent.CompletableFuture<String> searchActorsFirstHandle(String query) {
+        try {
+            String url = "https://public.api.bsky.app/xrpc/app.bsky.actor.searchActors?q="
+                       + java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8) + "&limit=1";
+            var req = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(url))
+                .header("Accept", "application/json")
+                .GET().build();
+            return java.net.http.HttpClient.newHttpClient()
+                .sendAsync(req, java.net.http.HttpResponse.BodyHandlers.ofString())
+                .thenApply(resp -> {
+                    System.out.println("[BLSKY] searchActors(" + query + ") HTTP " + resp.statusCode());
+                    if (resp.statusCode() == 200) {
+                        var obj = new org.json.JSONObject(resp.body());
+                        var arr = obj.optJSONArray("actors");
+                        if (arr != null && arr.length() > 0) {
+                            String handle = arr.getJSONObject(0).optString("handle", "");
+                            System.out.println("[BLSKY] searchActors -> " + handle);
+                            return handle;
+                        }
+                    }
+                    return "";
+                });
+        } catch (Exception e) {
+            var f = new java.util.concurrent.CompletableFuture<String>();
+            f.completeExceptionally(e);
+            return f;
+        }
+    }
+
+    // Resolve handle: DID from token -> getProfile(DID) -> getProfile(seed) -> seed+".bsky.social" -> search
+    static java.util.concurrent.CompletableFuture<String> resolveBlueskyHandle(String seed, String accessToken) {
+        String did = didFromJwtIfAny(accessToken);
+        System.out.println("[BLSKY] resolve: seed=" + seed + " didFromToken=" + did);
+
+        java.util.concurrent.CompletableFuture<String> start =
+            did.isBlank() ? java.util.concurrent.CompletableFuture.completedFuture("") : getProfileHandle(did);
+
+        return start.thenCompose(h -> {
+            if (!h.isBlank()) return java.util.concurrent.CompletableFuture.completedFuture(h);
+            return seed.isBlank() ? java.util.concurrent.CompletableFuture.completedFuture("") : getProfileHandle(seed);
+        }).thenCompose(h -> {
+            if (!h.isBlank()) return java.util.concurrent.CompletableFuture.completedFuture(h);
+            if (!seed.isBlank() && !seed.contains(".") && !seed.startsWith("did:plc:")) {
+                return getProfileHandle(seed + ".bsky.social");
+            }
+            return java.util.concurrent.CompletableFuture.completedFuture("");
+        }).thenCompose(h -> {
+            if (!h.isBlank()) return java.util.concurrent.CompletableFuture.completedFuture(h);
+            return seed.isBlank() ? java.util.concurrent.CompletableFuture.completedFuture("") : searchActorsFirstHandle(seed);
+        }).exceptionally(e -> {
+            System.out.println("[BLSKY][ERR] resolveBlueskyHandle: " + e);
+            return "";
+        });
+    }
     
     private void loadSFProFonts() {
         try {
@@ -263,22 +376,70 @@ public class MainPage extends Application {
                                     BlueskyUtil.exchangeCodeForTokens(cb.code(), codeVerifier, clientId, redirectUri, new BlueskyUtil.BlueskyCallback() {
                                         @Override
                                         public void onSuccess(BlueskyUtil.TokenSet tokenSet) {
-                                            blueskyAccessToken = tokenSet.accessToken; // Extract the access token
-                                            Platform.runLater(() -> {
-                                                statusLabel.setText("✅ Login successful!");
+                                            System.out.println("[BLSKY] tokenSet.accessToken present? " + (tokenSet != null && tokenSet.accessToken != null && !tokenSet.accessToken.isBlank()));
+                                            String idToken = getIdTokenFromTokenSet(tokenSet);
+                                            System.out.println("[BLSKY] tokenSet.id_token present? " + (idToken != null && !idToken.isBlank()));
+                                            // declare DID holder so it's available for later logic
+                                            String didFromIdToken = "";
+                                            if (idToken != null && !idToken.isBlank()) {
+                                                try {
+                                                    String[] parts = idToken.split("\\.");
+                                                    if (parts.length == 3) {
+                                                        String payload = new String(java.util.Base64.getUrlDecoder().decode(parts[1]), java.nio.charset.StandardCharsets.UTF_8);
+                                                        System.out.println("[BLSKY] id_token payload (trim): " + payload.substring(0, Math.min(500, payload.length())));
+                                                    } else {
+                                                        System.out.println("[BLSKY][WARN] id_token format unexpected");
+                                                    }
+                                                } catch (Exception ex) {
+                                                    System.out.println("[BLSKY][WARN] id_token decode failed: " + ex);
+                                                }
+                                            }
+                                            
+
+                                            // try decode id_token to get sub (DID)
+                                            try {
+                                                if (idToken != null && !idToken.isBlank()) {
+                                                    String[] parts = idToken.split("\\.");
+                                                    if (parts.length == 3) {
+                                                        String payloadJson = new String(java.util.Base64.getUrlDecoder().decode(parts[1]), java.nio.charset.StandardCharsets.UTF_8);
+                                                        org.json.JSONObject claims = new org.json.JSONObject(payloadJson);
+                                                        didFromIdToken = claims.optString("sub", "");
+                                                        System.out.println("[BLSKY] id_token sub (DID)=" + didFromIdToken);
+                                                    } else {
+                                                        System.out.println("[BLSKY][WARN] id_token format unexpected");
+                                                    }
+                                                } else {
+                                                    System.out.println("[BLSKY][WARN] id_token missing (did you request 'openid' scope?)");
+                                                }
+                                            } catch (Exception ex) {
+                                                System.out.println("[BLSKY][ERR] id_token decode failed: " + ex);
+                                            }
+
+                                            // choose actor to query: prefer DID, fallback to any already-known blueskyAcct
+                                            // Resolve a seed and canonical handle asynchronously before creating HomePage
+                                            String seed = nz(blueskyAcct, nz(didFromIdToken, "bluesky"));
+                                            System.out.println("[BLSKY] seed for handle resolution = " + seed);
+                                           resolveBlueskyHandle(seed, tokenSet.accessToken).thenAccept(resolved -> {
+                                                String finalHandle = stripBskySuffix(nz(resolved, seed));
+                                                System.out.println("[BLSKY] final handle = " + finalHandle);
                                                 
-                                                currentHomePage = new HomePage(
-                                                    "bluesky", 
-                                                    blueskyAccessToken,
-                                                    mastodonAccessToken,
-                                                    mastodonInstance,
-                                                    MainPage.this::showPlatformSelector, 
-                                                    MainPage.this::showBlueskyLoginForm, 
-                                                    MainPage.this::showMastodonLoginForm
+                                                Platform.runLater(() -> {
+                                                    statusLabel.setText("✅ Bluesky authorized");
+                                                    System.out.println("[BLSKY] Constructing HomePage with acct=" + finalHandle);
+                                                    currentHomePage = new HomePage(
+                                                        "bluesky",
+                                                        tokenSet.accessToken,
+                                                        mastodonAccessToken,
+                                                        mastodonInstance,
+                                                        finalHandle,
+                                                        mastodonAcct,
+                                                        MainPage.this::showPlatformSelector,
+                                                        MainPage.this::showBlueskyLoginForm,
+                                                        MainPage.this::showMastodonLoginForm
                                                     );
-                                                root.setCenter(currentHomePage);
+                                                    root.setCenter(currentHomePage);
+                                                });
                                             });
-                                            server.stop(); // Stop the server after successful token exchange
                                         }
 
                                         @Override
@@ -405,6 +566,8 @@ public class MainPage extends Application {
                                 blueskyAccessToken,
                                 mastodonAccessToken,
                                 mastodonInstance,
+                                blueskyAcct,
+                                mastodonAcct,
                                 MainPage.this::showPlatformSelector, 
                                 MainPage.this::showBlueskyLoginForm, 
                                 MainPage.this::showMastodonLoginForm
@@ -444,6 +607,42 @@ public class MainPage extends Application {
         if (t == null || t.isBlank()) return "(no-token)";
         if (t.length() <= 12) return t;
         return t.substring(0, 8) + "…" + t.substring(t.length() - 4);
+    }
+
+    private static String getIdTokenFromTokenSet(searchapp.BlueskyUtil.TokenSet tokenSet) {
+        if (tokenSet == null) return "";
+        try {
+            Class<?> cls = tokenSet.getClass();
+
+            // try common getter names first
+            try {
+                java.lang.reflect.Method m = cls.getMethod("getIdToken");
+                Object v = m.invoke(tokenSet);
+                if (v instanceof String) return (String) v;
+            } catch (NoSuchMethodException ignored) {}
+
+            try {
+                java.lang.reflect.Method m2 = cls.getMethod("getId_token");
+                Object v2 = m2.invoke(tokenSet);
+                if (v2 instanceof String) return (String) v2;
+            } catch (NoSuchMethodException ignored) {}
+
+            // try common field names
+            try {
+                java.lang.reflect.Field f = cls.getField("idToken");
+                Object v = f.get(tokenSet);
+                if (v instanceof String) return (String) v;
+            } catch (NoSuchFieldException ignored) {}
+
+            try {
+                java.lang.reflect.Field f2 = cls.getField("id_token");
+                Object v2 = f2.get(tokenSet);
+                if (v2 instanceof String) return (String) v2;
+            } catch (NoSuchFieldException ignored) {}
+        } catch (Exception e) {
+            System.out.println("[BLSKY][WARN] unable to extract id_token reflectively: " + e);
+        }
+        return "";
     }
     public static void styleButton(Button btn) {
         btn.setStyle("""
@@ -495,30 +694,48 @@ public class MainPage extends Application {
         client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .thenApply(HttpResponse::body)
                 .thenAccept(responseBody -> {
-                    // Check for success (look for "accessJwt" in response)
-                    if (responseBody.contains("accessJwt")) {
+                    try {
+                        System.out.println("[BLSKY] createSession OK");
+                        System.out.println("[BLSKY] createSession body (trim): " + responseBody.substring(0, Math.min(500, responseBody.length())));
+                        JSONObject obj = new JSONObject(responseBody);
+
+                        blueskyAccessToken = obj.getString("accessJwt");
+                        String did = obj.optString("did", "");
+                        String handle = obj.optString("handle", "");
+                        System.out.println("[BLSKY] tokens parsed. did=" + did + " handle=" + handle);
+
+                        // Use canonical handle from server; fallback to input username if missing
+                        blueskyAcct = (!handle.isBlank()) ? handle : username;
+                        blueskyAcct = stripBskySuffix(blueskyAcct);
+                        System.out.println("[BLSKY] resolved acct=" + blueskyAcct);
+
                         Platform.runLater(() -> {
                             statusLabel.setText("✅ Bluesky login successful!");
-                                currentHomePage = new HomePage(
-                                    "bluesky", 
-                                    blueskyAccessToken,
-                                    mastodonAccessToken,
-                                    mastodonInstance,
-                                    MainPage.this::showPlatformSelector, 
-                                    MainPage.this::showBlueskyLoginForm, 
-                                    MainPage.this::showMastodonLoginForm
-                                );
-                                root.setCenter(currentHomePage); 
+                            System.out.println("[BLSKY] Constructing HomePage with acct=" + blueskyAcct);
+                            currentHomePage = new HomePage(
+                                "bluesky",
+                                blueskyAccessToken,
+                                mastodonAccessToken,
+                                mastodonInstance,
+                                blueskyAcct,
+                                mastodonAcct,
+                                MainPage.this::showPlatformSelector,
+                                MainPage.this::showBlueskyLoginForm,
+                                MainPage.this::showMastodonLoginForm
+                            );
+                            root.setCenter(currentHomePage);
                         });
-                    } else {
-                        Platform.runLater(() -> statusLabel.setText("❌ Bluesky login failed: " + responseBody));
+                    } catch (Exception ex) {
+                        System.out.println("[BLSKY][ERR] createSession parse failed: " + ex);
+                        Platform.runLater(() -> statusLabel.setText("❌ Bluesky parse error: " + ex.getMessage()));
                     }
                 })
                 .exceptionally(e -> {
+                    System.out.println("[BLSKY][ERR] createSession exception: " + e);
                     Platform.runLater(() -> statusLabel.setText("❌ Bluesky login error: " + e.getMessage()));
                     return null;
                 });
-        }
+    }
         public void handleMastodonOAuthCode(String clientId, String clientSecret, String code) {
             if (clientId.isEmpty() || clientSecret.isEmpty() || code.isEmpty()) {
                 statusLabel.setText("❌ Please fill in all fields.");
@@ -549,6 +766,8 @@ public class MainPage extends Application {
                                     blueskyAccessToken,
                                     mastodonAccessToken,
                                     mastodonInstance,
+                                    blueskyAcct,
+                                    mastodonAcct,
                                     MainPage.this::showPlatformSelector, 
                                     MainPage.this::showBlueskyLoginForm, 
                                     MainPage.this::showMastodonLoginForm

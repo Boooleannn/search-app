@@ -15,14 +15,20 @@ public class HomePage extends BorderPane {
     private VBox sidebarContent;
     private boolean sidebarExpanded = true;
     private VBox resultsArea;
+    private final String blueskyHandle;
+    private final String mastodonHandle;
 
     public HomePage(String platform,
                     String blueskyAccessToken,
-                    String mastodonAccessToken,
+                   String mastodonAccessToken,
                     String mastodonInstance,
+                    String blueskyHandle,
+                    String mastodonHandle,
                     Runnable onGoBack,
                     Runnable onBlueskyLogin,
                     Runnable onMastodonLogin){
+        this.blueskyHandle = blueskyHandle == null ? "" : blueskyHandle;
+        this.mastodonHandle = mastodonHandle == null ? "" : mastodonHandle;
         // === Top: Search Bar ===
         HBox searchBar = createSearchBar(platform, onGoBack, onBlueskyLogin, blueskyAccessToken, mastodonAccessToken, mastodonInstance);
         this.setTop(searchBar);
@@ -566,17 +572,25 @@ public class HomePage extends BorderPane {
             ImageView mastodonView = new ImageView(mastodonImage);
             mastodonView.setFitHeight(40); mastodonView.setFitWidth(40);
 
+            // Bluesky row: icon + handle label
+            HBox blueskyRow = new HBox(8);
+            blueskyRow.setAlignment(Pos.CENTER_LEFT);
             Button blueskyButton = new Button("", blueskyView);
             MainPage.styleBigButton(blueskyButton);
-            blueskyButton.setOnAction(e -> {
-                if (onBlueskyLogin != null) onBlueskyLogin.run();
-            });
+            blueskyButton.setOnAction(e -> { if (onBlueskyLogin != null) onBlueskyLogin.run(); });
+            Label blueskyHandleLbl = new Label(this.blueskyHandle);
+            blueskyHandleLbl.setStyle("-fx-font-size: 13px; -fx-text-fill: #333;");
+            blueskyRow.getChildren().addAll(blueskyButton, blueskyHandleLbl);
 
+            // Mastodon row: icon + handle label
+            HBox mastodonRow = new HBox(8);
+            mastodonRow.setAlignment(Pos.CENTER_LEFT);
             Button mastodonButton = new Button("", mastodonView);
             MainPage.styleBigButton(mastodonButton);
-            mastodonButton.setOnAction(e -> {
-                if (onMastodonLogin != null) onMastodonLogin.run();
-            });
+            mastodonButton.setOnAction(e -> { if (onMastodonLogin != null) onMastodonLogin.run(); });
+            Label mastodonHandleLbl = new Label(this.mastodonHandle);
+            mastodonHandleLbl.setStyle("-fx-font-size: 13px; -fx-text-fill: #333;");
+            mastodonRow.getChildren().addAll(mastodonButton, mastodonHandleLbl);
 
             Label trendingLabel = new Label("Trending");
             trendingLabel.setStyle("-fx-font-size: 24; -fx-font-weight: bold;");
@@ -585,7 +599,7 @@ public class HomePage extends BorderPane {
             Button uvleButton = new Button("UVLE");
             uvleButton.setStyle("-fx-background-radius: 20;");
 
-            sidebarContent.getChildren().addAll(mastodonButton, blueskyButton, trendingBox, uvleButton);
+            sidebarContent.getChildren().addAll(mastodonRow, blueskyRow, trendingBox, uvleButton);
         } catch (Exception ex) {
             sidebarContent.getChildren().add(new Label("⚠️ Sidebar error"));
         }
