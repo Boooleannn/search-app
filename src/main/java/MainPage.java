@@ -423,15 +423,40 @@ public class MainPage extends Application {
                                                 String finalHandle = stripBskySuffix(nz(resolved, seed));
                                                 System.out.println("[BLSKY] final handle = " + finalHandle);
                                                 
+                                                // Persist Bluesky token/handle to this MainPage instance so other flows see it
+                                                MainPage.this.blueskyAccessToken = tokenSet.accessToken;
+                                                MainPage.this.blueskyAcct = finalHandle;
+                                                System.out.println("[STATE] Saved Bluesky (OAuth): token? " + (MainPage.this.blueskyAccessToken != null) + " acct=" + MainPage.this.blueskyAcct);
+
                                                 Platform.runLater(() -> {
                                                     statusLabel.setText("✅ Bluesky authorized");
                                                     System.out.println("[BLSKY] Constructing HomePage with acct=" + finalHandle);
+                                                   try {
+                                                       currentHomePage = new HomePage(
+                                                           "bluesky",
+                                                          MainPage.this.blueskyAccessToken,
+                                                           mastodonAccessToken,
+                                                           mastodonInstance,
+                                                           MainPage.this.blueskyAcct,
+                                                           mastodonAcct,
+                                                           MainPage.this::showPlatformSelector,
+                                                           MainPage.this::showBlueskyLoginForm,
+                                                           MainPage.this::showMastodonLoginForm
+                                                       );                                                     root.setCenter(currentHomePage);
+                                                      System.out.println("[STATE] HomePage setCenter OK");
+                                                   } catch (Throwable t) {
+                                                       System.out.println("[STATE][ERR] HomePage creation failed: " + t);
+                                                       t.printStackTrace();
+                                                       statusLabel.setText("❌ Error opening HomePage: " + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage()));
+                                                   }
+                                                   // stop callback server if still running (avoid lingering listener)
+                                                   try { if (server != null) server.stop(); } catch (Exception ignored) {}
                                                     currentHomePage = new HomePage(
                                                         "bluesky",
-                                                        tokenSet.accessToken,
+                                                        MainPage.this.blueskyAccessToken,
                                                         mastodonAccessToken,
                                                         mastodonInstance,
-                                                        finalHandle,
+                                                        MainPage.this.blueskyAcct,
                                                         mastodonAcct,
                                                         MainPage.this::showPlatformSelector,
                                                         MainPage.this::showBlueskyLoginForm,
@@ -520,35 +545,21 @@ public class MainPage extends Application {
             auth.mastodon.MastodonAuth.startLoginWithHandle(input,
                 session -> { // onSuccess
                     Platform.runLater(() -> {
-                        // store token + account info for later use
-                        mastodonAccessToken = session.accessToken;
-                        mastodonInstance = session.instance;
-                        mastodonAcct = session.account.acct != null ? session.account.acct : session.account.username;
-                        mastodonDisplayName = (session.account.displayName != null && !session.account.displayName.isBlank())
-                                ? session.account.displayName
-                               : session.account.username;
-
-                        // show a masked token and the user info so we can confirm login succeeded
-                        String acctShown = mastodonAcct.startsWith("@") ? mastodonAcct : "@" + mastodonAcct;
-                        String masked = maskToken(mastodonAccessToken);
-                        statusLabel.setText(String.format("✅ Logged in: %s (%s) on %s — token: %s",
-                                mastodonDisplayName, acctShown, mastodonInstance, masked));
-                        // choose display name (prefer displayName, fallback to username)
-                        String display = (session.account.displayName != null && !session.account.displayName.isBlank())
+                        // persist mastodon session into instance fields
+                        MainPage.this.mastodonAccessToken = session.accessToken;
+                        MainPage.this.mastodonInstance = session.instance;
+                        MainPage.this.mastodonAcct = session.account.acct != null ? session.account.acct : session.account.username;
+                        MainPage.this.mastodonDisplayName = (session.account.displayName != null && !session.account.displayName.isBlank())
                                 ? session.account.displayName
                                 : session.account.username;
 
-                        // ensure acct is shown like @user or @user@host
-                        String acct = session.account.acct != null ? session.account.acct : session.account.username;
-                        if (!acct.startsWith("@")) acct = "@" + acct;
-
-                        String msg = String.format("✅ Logged in as %s (%s) on %s", display, acct, session.instance);
+                        // UI feedback
+                        String acctShown = MainPage.this.mastodonAcct.startsWith("@") ? MainPage.this.mastodonAcct : "@" + MainPage.this.mastodonAcct;
+                        String masked = maskToken(MainPage.this.mastodonAccessToken);
+                        String msg = String.format("✅ Logged in as %s (%s) on %s", MainPage.this.mastodonDisplayName, acctShown, MainPage.this.mastodonInstance);
                         statusLabel.setText(msg);
-
-                        // re-enable UI
                         signInBtn.setDisable(false);
 
-                        // non-sensitive debug (do NOT print tokens)
                         System.out.println("[mastodon] account id=" + session.account.id
                                 + " username=" + session.account.username
                                 + " acct=" + session.account.acct
@@ -558,21 +569,61 @@ public class MainPage extends Application {
                         Alert a = new Alert(Alert.AlertType.INFORMATION);
                         a.setTitle("Mastodon Login");
                         a.setHeaderText("Login successful");
-                        a.setContentText("Logged in as " + display + " (" + acct + ") on " + session.instance);
+                        a.setContentText("Logged in as " + MainPage.this.mastodonDisplayName + " (" + acctShown + ") on " + session.instance);
                         a.showAndWait();
 
-                        currentHomePage = new HomePage(
-                                "mastodon", 
-                                blueskyAccessToken,
-                                mastodonAccessToken,
-                                mastodonInstance,
-                                blueskyAcct,
-                                mastodonAcct,
-                                MainPage.this::showPlatformSelector, 
-                                MainPage.this::showBlueskyLoginForm, 
-                                MainPage.this::showMastodonLoginForm
-                                );
+                        // DO NOT clear Bluesky here; preserve current blueskyAccessToken/blueskyAcct
+                        System.out.println("[STATE] After Mastodon login: KEEPING Bluesky -> token? " 
+                            + (MainPage.this.blueskyAccessToken != null) + " handle=" + MainPage.this.blueskyAcct);
+
+                        // If HomePage already exists, update it; otherwise create it passing the preserved Bluesky values.
+                        if (currentHomePage != null) {
+                            // Try to call updateAccounts(...) on HomePage if implemented
+                            try {
+                                java.lang.reflect.Method m = currentHomePage.getClass()
+                                        .getMethod("updateAccounts", String.class, String.class, String.class, String.class, String.class);
+                                m.invoke(currentHomePage,
+                                        MainPage.this.blueskyAccessToken,
+                                        MainPage.this.mastodonAccessToken,
+                                        MainPage.this.mastodonInstance,
+                                        MainPage.this.blueskyAcct,
+                                        MainPage.this.mastodonAcct);
+                                // bring HomePage to front in case login form was showing
+                                root.setCenter(currentHomePage);
+                                System.out.println("[STATE] Updated HomePage and navigated to it.");
+                            } catch (NoSuchMethodException nsme) {
+                                // Fallback: try setMastodonHandle setter if available
+                                try {
+                                    java.lang.reflect.Method m2 = currentHomePage.getClass().getMethod("setMastodonHandle", String.class);
+                                    m2.invoke(currentHomePage, MainPage.this.mastodonAcct);
+                                    root.setCenter(currentHomePage);
+                                    System.out.println("[STATE] Invoked setMastodonHandle and navigated to HomePage.");
+                                } catch (Exception ignored) {
+                                    System.out.println("[STATE][ERR] fallback setMastodonHandle failed: " + ignored);
+                                }
+                            } catch (Exception ex) {
+                                System.out.println("[STATE][ERR] failed to call updateAccounts: " + ex);
+                            }
+                        } else {
+                            // create HomePage but pass the current blueskyAccessToken (do not pass null to intentionally drop it)
+                            currentHomePage = new HomePage(
+                                    "mastodon",
+                                    MainPage.this.blueskyAccessToken,
+                                    MainPage.this.mastodonAccessToken,
+                                    MainPage.this.mastodonInstance,
+                                    MainPage.this.blueskyAcct,
+                                    MainPage.this.mastodonAcct,
+                                    MainPage.this::showPlatformSelector,
+                                    MainPage.this::showBlueskyLoginForm,
+                                    MainPage.this::showMastodonLoginForm
+                            );
+                            root.setCenter(currentHomePage);
+                        }
                         root.setCenter(currentHomePage);
+
+                        System.out.println("[STATE] Final after Mastodon success -> BSKY: token? "
+                                + (MainPage.this.blueskyAccessToken != null) + " acct=" + MainPage.this.blueskyAcct
+                                + " | MASTO: token? " + (MainPage.this.mastodonAccessToken != null) + " acct=" + MainPage.this.mastodonAcct);
                     });
                 },
                 err -> { // onError
