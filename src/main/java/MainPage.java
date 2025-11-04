@@ -490,8 +490,34 @@ public class MainPage extends Application {
             }
         });
 
-        VBox form = new VBox(15, header, openBrowserButton, backButton);
-        form.setAlignment(Pos.CENTER);
+        Label infoLbl = new Label("You are on the Bluesky login page. You can return to the Home page at any time.");
+        infoLbl.setStyle("-fx-font-size: 12px; -fx-text-fill: #333;");
+
+        Button returnHomeBtn = new Button("Return to Home");
+        styleButton(returnHomeBtn);
+        returnHomeBtn.setOnAction(ev -> {
+            try {
+                if (currentHomePage == null) {
+                    currentHomePage = new HomePage(
+                        "all",
+                        blueskyAccessToken,
+                        mastodonAccessToken,
+                        mastodonInstance,
+                        blueskyAcct,
+                        mastodonAcct,
+                        MainPage.this::showPlatformSelector,
+                        MainPage.this::showBlueskyLoginForm,
+                        MainPage.this::showMastodonLoginForm
+                    );
+                }
+                root.setCenter(currentHomePage);
+                statusLabel.setText("Returned to Home");
+            } catch (Throwable t) {
+                System.out.println("[NAV][ERR] Return to Home failed: " + t);
+            }
+        });
+
+        VBox form = new VBox(12, header, infoLbl, openBrowserButton, backButton, returnHomeBtn);        form.setAlignment(Pos.CENTER);
 
         loginFormContainer.getChildren().add(form);
         root.setCenter(loginFormContainer);
@@ -528,8 +554,34 @@ public class MainPage extends Application {
         styleButton(backButton);
         backButton.setOnAction(e -> showPlatformSelector());
 
-        VBox v = new VBox(12, header, handleFieldWrapper, signInBtn, backButton);
-        v.setAlignment(Pos.CENTER);
+        Label infoLbl = new Label("You are on the Mastodon login page. You can return to the Home page at any time.");
+        infoLbl.setStyle("-fx-font-size: 12px; -fx-text-fill: #333;");
+
+        Button returnHomeBtn = new Button("Return to Home");
+        styleButton(returnHomeBtn);
+        returnHomeBtn.setOnAction(ev -> {
+            try {
+                if (currentHomePage == null) {
+                    currentHomePage = new HomePage(
+                        "all",
+                        blueskyAccessToken,
+                        mastodonAccessToken,
+                        mastodonInstance,
+                        blueskyAcct,
+                        mastodonAcct,
+                        MainPage.this::showPlatformSelector,
+                        MainPage.this::showBlueskyLoginForm,
+                        MainPage.this::showMastodonLoginForm
+                    );
+                }
+                root.setCenter(currentHomePage);
+                statusLabel.setText("Returned to Home");
+            } catch (Throwable t) {
+                System.out.println("[NAV][ERR] Return to Home failed: " + t);
+            }
+        });
+
+        VBox v = new VBox(12, header, infoLbl, handleFieldWrapper, signInBtn, backButton, returnHomeBtn);        v.setAlignment(Pos.CENTER);
 
         signInBtn.setOnAction(e -> {
             String input = handleField.getText();
