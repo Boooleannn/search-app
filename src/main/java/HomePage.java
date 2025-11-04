@@ -15,8 +15,10 @@ public class HomePage extends BorderPane {
     private VBox sidebarContent;
     private boolean sidebarExpanded = true;
     private VBox resultsArea;
-    private final String blueskyHandle;
-    private final String mastodonHandle;
+    private String blueskyHandle;
+    private String mastodonHandle;
+    private Label blueskyHandleLbl;
+    private Label mastodonHandleLbl;
 
     public HomePage(String platform,
                     String blueskyAccessToken,
@@ -477,13 +479,24 @@ public class HomePage extends BorderPane {
             Button mastodonButton = new Button("", mastodonView);
             MainPage.styleBigButton(mastodonButton);
             mastodonButton.setOnAction(e -> { if (onMastodonLogin != null) onMastodonLogin.run(); });
-            Label mastodonHandleLbl = new Label(this.mastodonHandle);
+            mastodonHandleLbl = new Label(this.mastodonHandle == null ? "" : this.mastodonHandle);
             mastodonHandleLbl.setStyle("-fx-font-size: 13px; -fx-text-fill: #333;");
             mastodonRow.getChildren().addAll(mastodonButton, mastodonHandleLbl);
 
 
 
-            sidebarContent.getChildren().addAll(mastodonRow, blueskyRow);
+
+            HBox refreshRow = new HBox();
+            refreshRow.setAlignment(Pos.CENTER_RIGHT);
+            Button refreshBtn = new Button("Refresh");
+            refreshBtn.setStyle("-fx-font-size:11px;");
+            refreshBtn.setOnAction(ev -> {
+                // update labels from currently stored handles
+                refresh();
+            });
+            refreshRow.getChildren().add(refreshBtn);
+
+            sidebarContent.getChildren().addAll(mastodonRow, blueskyRow, refreshRow);
         } catch (Exception ex) {
             sidebarContent.getChildren().add(new Label("⚠️ Sidebar error"));
         }
@@ -584,4 +597,28 @@ public class HomePage extends BorderPane {
     HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
     System.out.println("getSession HTTP " + resp.statusCode() + " body=" + resp.body());
 }
+    public void setMastodonHandle(String handle) {
+        this.mastodonHandle = (handle == null) ? "" : handle;
+        if (mastodonHandleLbl != null) {
+            Platform.runLater(() -> mastodonHandleLbl.setText(this.mastodonHandle));
+        }
+        System.out.println("[UI] setMastodonHandle -> " + this.mastodonHandle);
+    }
+
+    public void setBlueskyHandle(String handle) {
+        this.blueskyHandle = (handle == null) ? "" : handle;
+        if (blueskyHandleLbl != null) {
+            Platform.runLater(() -> blueskyHandleLbl.setText(this.blueskyHandle));
+        }
+        System.out.println("[UI] setBlueskyHandle -> " + this.blueskyHandle);
+    }
+
+    // Force refresh of visible account labels (safe to call from FX thread)
+    public void refresh() {
+        Platform.runLater(() -> {
+            if (blueskyHandleLbl != null) blueskyHandleLbl.setText(this.blueskyHandle == null ? "" : this.blueskyHandle);
+            if (mastodonHandleLbl != null) mastodonHandleLbl.setText(this.mastodonHandle == null ? "" : this.mastodonHandle);
+            System.out.println("[UI] HomePage refresh: BSKY=" + this.blueskyHandle + " MASTO=" + this.mastodonHandle);
+        });
+    }
 }
