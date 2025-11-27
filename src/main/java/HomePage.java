@@ -35,18 +35,6 @@ public class HomePage extends BorderPane {
         HBox searchBar = createSearchBar(platform, onGoBack, onBlueskyLogin, blueskyAccessToken, mastodonAccessToken, mastodonInstance);
         this.setTop(searchBar);
 
-        // === Center: Tabs + Results Area ===
-        HBox tabs = new HBox(40);
-        tabs.setAlignment(Pos.CENTER_LEFT);
-        tabs.setPadding(new Insets(0, 0, 0, 20));
-        tabs.setStyle("-fx-background-color: #a3a3ff; -fx-border-color: black; -fx-border-width: 1 0 1 0;");
-        String[] tabNames = {"All", "Profiles", "Hashtags", "Posts"};
-        for (String name : tabNames) {
-            Label tab = new Label(name);
-            tab.setStyle("-fx-font-size: 18; -fx-font-weight: bold;");
-            tabs.getChildren().add(tab);
-        }
-
         resultsArea = new VBox();
         resultsArea.setPadding(new Insets(20));
         resultsArea.setFillWidth(true);
@@ -64,7 +52,7 @@ public class HomePage extends BorderPane {
         VBox.setVgrow(resultsScroll, Priority.ALWAYS);
         HBox.setHgrow(resultsScroll, Priority.ALWAYS);
 
-        VBox centerBox = new VBox(tabs, resultsScroll);
+        VBox centerBox = new VBox( resultsScroll);
         VBox.setVgrow(resultsScroll, Priority.ALWAYS);
         centerBox.setStyle("-fx-background-color: #f0f8ff;");
         this.setCenter(centerBox);
