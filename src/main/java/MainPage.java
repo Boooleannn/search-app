@@ -591,7 +591,6 @@ public class MainPage extends Application {
             }
             signInBtn.setDisable(true);
             statusLabel.setText("⏳ Starting Mastodon login...");
-            // ensure statusLabel is visible at bottom
             root.setBottom(statusLabel);
 
             auth.mastodon.MastodonAuth.startLoginWithHandle(input,
@@ -624,40 +623,18 @@ public class MainPage extends Application {
                         a.setContentText("Logged in as " + MainPage.this.mastodonDisplayName + " (" + acctShown + ") on " + session.instance);
                         a.showAndWait();
 
-                        // DO NOT clear Bluesky here; preserve current blueskyAccessToken/blueskyAcct
                         System.out.println("[STATE] After Mastodon login: KEEPING Bluesky -> token? " 
                             + (MainPage.this.blueskyAccessToken != null) + " handle=" + MainPage.this.blueskyAcct);
 
-                        // If HomePage already exists, update it; otherwise create it passing the preserved Bluesky values.
+                        // If HomePage already exists, update it with new Mastodon info
                         if (currentHomePage != null) {
-                            // Try to call updateAccounts(...) on HomePage if implemented
-                            try {
-                                java.lang.reflect.Method m = currentHomePage.getClass()
-                                        .getMethod("updateAccounts", String.class, String.class, String.class, String.class, String.class);
-                                m.invoke(currentHomePage,
-                                        MainPage.this.blueskyAccessToken,
-                                        MainPage.this.mastodonAccessToken,
-                                        MainPage.this.mastodonInstance,
-                                        MainPage.this.blueskyAcct,
-                                        MainPage.this.mastodonAcct);
-                                // bring HomePage to front in case login form was showing
-                                root.setCenter(currentHomePage);
-                                System.out.println("[STATE] Updated HomePage and navigated to it.");
-                            } catch (NoSuchMethodException nsme) {
-                                // Fallback: try setMastodonHandle setter if available
-                                try {
-                                    java.lang.reflect.Method m2 = currentHomePage.getClass().getMethod("setMastodonHandle", String.class);
-                                    m2.invoke(currentHomePage, MainPage.this.mastodonAcct);
-                                    root.setCenter(currentHomePage);
-                                    System.out.println("[STATE] Invoked setMastodonHandle and navigated to HomePage.");
-                                } catch (Exception ignored) {
-                                    System.out.println("[STATE][ERR] fallback setMastodonHandle failed: " + ignored);
-                                }
-                            } catch (Exception ex) {
-                                System.out.println("[STATE][ERR] failed to call updateAccounts: " + ex);
-                            }
+                            System.out.println("[STATE] HomePage exists, updating Mastodon account...");
+                            currentHomePage.setMastodonHandle(MainPage.this.mastodonAcct);
+                            currentHomePage.refresh();
+                            root.setCenter(currentHomePage);
                         } else {
-                            // create HomePage but pass the current blueskyAccessToken (do not pass null to intentionally drop it)
+                            // Create new HomePage with both accounts
+                            System.out.println("[STATE] Creating new HomePage with Mastodon account...");
                             currentHomePage = new HomePage(
                                     "mastodon",
                                     MainPage.this.blueskyAccessToken,
@@ -671,7 +648,6 @@ public class MainPage extends Application {
                             );
                             root.setCenter(currentHomePage);
                         }
-                        root.setCenter(currentHomePage);
 
                         System.out.println("[STATE] Final after Mastodon success -> BSKY: token? "
                                 + (MainPage.this.blueskyAccessToken != null) + " acct=" + MainPage.this.blueskyAcct
