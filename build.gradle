@@ -69,3 +69,22 @@ jar {
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
+
+tasks.withType(Javadoc) {
+    options.encoding = 'UTF-8'
+    options.author = true
+    options.version = true
+    options.addStringOption('html5', '-html5')
+    options.addStringOption('Xdoclint:none', '-quiet')
+    options.links("https://docs.oracle.com/en/java/javase/21/docs/api/")
+
+    classpath = files(sourceSets.main.compileClasspath, configurations.runtimeClasspath)
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    archiveClassifier.set('javadoc')
+    from javadoc.destinationDir
+}
+artifacts {
+    archives javadocJar
+}
