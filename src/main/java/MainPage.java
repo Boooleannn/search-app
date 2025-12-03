@@ -431,38 +431,27 @@ public class MainPage extends Application {
                                                 Platform.runLater(() -> {
                                                     statusLabel.setText("✅ Bluesky authorized");
                                                     System.out.println("[BLSKY] Constructing HomePage with acct=" + finalHandle);
-                                                   try {
-                                                       currentHomePage = new HomePage(
-                                                           "bluesky",
-                                                          MainPage.this.blueskyAccessToken,
-                                                           mastodonAccessToken,
-                                                           mastodonInstance,
-                                                           MainPage.this.blueskyAcct,
-                                                           mastodonAcct,
-                                                           MainPage.this::showPlatformSelector,
-                                                           MainPage.this::showBlueskyLoginForm,
-                                                           MainPage.this::showMastodonLoginForm
-                                                       );                                                     root.setCenter(currentHomePage);
-                                                      System.out.println("[STATE] HomePage setCenter OK");
-                                                   } catch (Throwable t) {
-                                                       System.out.println("[STATE][ERR] HomePage creation failed: " + t);
-                                                       t.printStackTrace();
-                                                       statusLabel.setText("❌ Error opening HomePage: " + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage()));
-                                                   }
-                                                   // stop callback server if still running (avoid lingering listener)
-                                                   try { if (server != null) server.stop(); } catch (Exception ignored) {}
-                                                    currentHomePage = new HomePage(
-                                                        "bluesky",
-                                                        MainPage.this.blueskyAccessToken,
-                                                        mastodonAccessToken,
-                                                        mastodonInstance,
-                                                        MainPage.this.blueskyAcct,
-                                                        mastodonAcct,
-                                                        MainPage.this::showPlatformSelector,
-                                                        MainPage.this::showBlueskyLoginForm,
-                                                        MainPage.this::showMastodonLoginForm
-                                                    );
-                                                    root.setCenter(currentHomePage);
+                                                    try {
+                                                        currentHomePage = new HomePage(
+                                                            "bluesky",
+                                                            MainPage.this.blueskyAccessToken,
+                                                            mastodonAccessToken,
+                                                            mastodonInstance,
+                                                            MainPage.this.blueskyAcct,
+                                                            mastodonAcct,
+                                                            MainPage.this::showPlatformSelector,
+                                                            MainPage.this::showBlueskyLoginForm,
+                                                            MainPage.this::showMastodonLoginForm
+                                                        );
+                                                        root.setCenter(currentHomePage);
+                                                        System.out.println("[STATE] HomePage setCenter OK");
+                                                    } catch (Throwable t) {
+                                                        System.out.println("[STATE][ERR] HomePage creation failed: " + t);
+                                                        t.printStackTrace();
+                                                        statusLabel.setText("❌ Error opening HomePage: " + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage()));
+                                                    }
+                                                    // stop callback server if still running (avoid lingering listener)
+                                                    try { if (server != null) server.stop(); } catch (Exception ignored) {}
                                                 });
                                             });
                                         }
@@ -606,48 +595,24 @@ public class MainPage extends Application {
 
                         // UI feedback
                         String acctShown = MainPage.this.mastodonAcct.startsWith("@") ? MainPage.this.mastodonAcct : "@" + MainPage.this.mastodonAcct;
-                        String masked = maskToken(MainPage.this.mastodonAccessToken);
                         String msg = String.format("✅ Logged in as %s (%s) on %s", MainPage.this.mastodonDisplayName, acctShown, MainPage.this.mastodonInstance);
                         statusLabel.setText(msg);
                         signInBtn.setDisable(false);
 
-                        System.out.println("[mastodon] account id=" + session.account.id
-                                + " username=" + session.account.username
-                                + " acct=" + session.account.acct
-                                + " displayName=" + session.account.displayName
-                                + " instance=" + session.instance);
-
-                        Alert a = new Alert(Alert.AlertType.INFORMATION);
-                        a.setTitle("Mastodon Login");
-                        a.setHeaderText("Login successful");
-                        a.setContentText("Logged in as " + MainPage.this.mastodonDisplayName + " (" + acctShown + ") on " + session.instance);
-                        a.showAndWait();
-
-                        System.out.println("[STATE] After Mastodon login: KEEPING Bluesky -> token? " 
-                            + (MainPage.this.blueskyAccessToken != null) + " handle=" + MainPage.this.blueskyAcct);
-
-                        // If HomePage already exists, update it with new Mastodon info
-                        if (currentHomePage != null) {
-                            System.out.println("[STATE] HomePage exists, updating Mastodon account...");
-                            currentHomePage.setMastodonHandle(MainPage.this.mastodonAcct);
-                            currentHomePage.refresh();
-                            root.setCenter(currentHomePage);
-                        } else {
-                            // Create new HomePage with both accounts
-                            System.out.println("[STATE] Creating new HomePage with Mastodon account...");
-                            currentHomePage = new HomePage(
-                                    "mastodon",
-                                    MainPage.this.blueskyAccessToken,
-                                    MainPage.this.mastodonAccessToken,
-                                    MainPage.this.mastodonInstance,
-                                    MainPage.this.blueskyAcct,
-                                    MainPage.this.mastodonAcct,
-                                    MainPage.this::showPlatformSelector,
-                                    MainPage.this::showBlueskyLoginForm,
-                                    MainPage.this::showMastodonLoginForm
-                            );
-                            root.setCenter(currentHomePage);
-                        }
+                        // fix for mastodon login
+                        System.out.println("[STATE] Recreating HomePage with updated Mastodon account...");
+                        currentHomePage = new HomePage(
+                            "all",
+                            MainPage.this.blueskyAccessToken,
+                            MainPage.this.mastodonAccessToken,
+                            MainPage.this.mastodonInstance,
+                            MainPage.this.blueskyAcct,
+                            MainPage.this.mastodonAcct,
+                            MainPage.this::showPlatformSelector,
+                            MainPage.this::showBlueskyLoginForm,
+                            MainPage.this::showMastodonLoginForm
+                        );
+                        root.setCenter(currentHomePage);
 
                         System.out.println("[STATE] Final after Mastodon success -> BSKY: token? "
                                 + (MainPage.this.blueskyAccessToken != null) + " acct=" + MainPage.this.blueskyAcct
